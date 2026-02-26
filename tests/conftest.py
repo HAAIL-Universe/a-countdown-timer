@@ -60,16 +60,9 @@ async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-@pytest.fixture
-def client(test_session):
-    """FastAPI test client."""
-    from fastapi.testclient import TestClient
-    return TestClient(app)
-
-
 @pytest_asyncio.fixture
-async def async_client():
-    """Async FastAPI test client."""
+async def client():
+    """Async FastAPI test client for integration tests."""
     from httpx import AsyncClient
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        yield client
+    async with AsyncClient(app=app, base_url="http://test") as async_client:
+        yield async_client

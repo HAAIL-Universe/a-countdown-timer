@@ -54,3 +54,6 @@ class TimerResponse(BaseModel):
     class Config:
         """Pydantic configuration."""
         use_enum_values = False
+
+
+TimerCreateRequest = TimerCreate

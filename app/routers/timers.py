@@ -23,7 +23,7 @@ async def create_timer(payload: TimerCreateRequest, service: TimerService) -> Ti
 @router.get("", response_model=list[TimerResponse])
 async def list_timers(service: TimerService) -> list[TimerResponse]:
     """List all timers."""
-    timers = await service.get_all_timers()
+    timers = await service.list_timers()
     return [TimerResponse.model_validate(t) for t in timers]
 
 
