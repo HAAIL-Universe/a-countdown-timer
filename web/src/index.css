@@ -1,0 +1,227 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Dark theme base styles */
+@layer base {
+  html, body, #root {
+    @apply h-full w-full bg-gray-900 text-white;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+      sans-serif;
+  }
+}
+
+/* Timer digit display — monospace for countdown */
+@layer components {
+  .timer-digits {
+    @apply font-mono text-6xl md:text-7xl font-bold tracking-tight;
+  }
+
+  /* Color transitions for urgency levels */
+  .urgency-idle {
+    @apply text-green-400;
+  }
+
+  .urgency-running {
+    @apply text-blue-400;
+  }
+
+  .urgency-urgent {
+    @apply text-yellow-400;
+  }
+
+  .urgency-critical {
+    @apply text-red-500;
+  }
+
+  /* Background color transitions */
+  .urgency-bg-idle {
+    @apply bg-gradient-to-br from-green-900/20 to-green-800/10;
+  }
+
+  .urgency-bg-running {
+    @apply bg-gradient-to-br from-blue-900/20 to-blue-800/10;
+  }
+
+  .urgency-bg-urgent {
+    @apply bg-gradient-to-br from-yellow-900/20 to-yellow-800/10;
+  }
+
+  .urgency-bg-critical {
+    @apply bg-gradient-to-br from-red-900/30 to-red-800/20;
+  }
+
+  /* Character face container */
+  .character-container {
+    @apply flex items-center justify-center w-48 h-48 md:w-64 md:h-64 lg:w-80 lg:h-80 rounded-full transition-colors duration-500;
+  }
+
+  /* Main timer container */
+  .timer-container {
+    @apply flex flex-col items-center justify-center min-h-screen gap-8 px-4 py-8 transition-colors duration-500;
+  }
+
+  /* Control button base */
+  .control-btn {
+    @apply px-6 py-3 md:px-8 md:py-4 font-semibold text-white rounded-lg transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100;
+  }
+
+  .btn-primary {
+    @apply control-btn bg-blue-600 hover:bg-blue-700;
+  }
+
+  .btn-success {
+    @apply control-btn bg-green-600 hover:bg-green-700;
+  }
+
+  .btn-warning {
+    @apply control-btn bg-yellow-600 hover:bg-yellow-700;
+  }
+
+  .btn-danger {
+    @apply control-btn bg-red-600 hover:bg-red-700;
+  }
+
+  /* Input field styling */
+  .duration-input {
+    @apply px-4 py-2 text-lg font-mono bg-gray-800 text-white border-2 border-gray-700 rounded-lg focus:border-blue-500 focus:outline-none transition-colors duration-200;
+  }
+
+  /* Responsive scaling for desktop/mobile */
+  .timer-layout {
+    @apply w-full max-w-2xl mx-auto;
+  }
+}
+
+/* Custom keyframe animations */
+@keyframes urgency-flash {
+  0%, 100% {
+    color: rgb(239, 68, 68);
+    text-shadow: 0 0 10px rgba(239, 68, 68, 0.8);
+  }
+  50% {
+    color: rgb(220, 38, 38);
+    text-shadow: 0 0 20px rgba(239, 68, 68, 1);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(239, 68, 68, 0.8);
+  }
+}
+
+@keyframes background-pulse {
+  0%, 100% {
+    background-color: rgba(127, 29, 29, 0.3);
+  }
+  50% {
+    background-color: rgba(239, 68, 68, 0.2);
+  }
+}
+
+@keyframes character-shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
+
+@keyframes idle-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+/* Utility animations */
+@layer utilities {
+  .animate-urgency-flash {
+    animation: urgency-flash 0.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 1s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-background-pulse {
+    animation: background-pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-character-shake {
+    animation: character-shake 0.3s cubic-bezier(0.36, 0, 0.66, 1) infinite;
+  }
+
+  .animate-idle-float {
+    animation: idle-float 3s ease-in-out infinite;
+  }
+
+  /* Color transition modifiers */
+  .transition-urgency {
+    @apply transition-colors duration-500;
+  }
+
+  /* Smooth transitions for state changes */
+  .ease-urgency {
+    @apply cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Text shadow for glow effect */
+  .glow-text {
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
+  }
+
+  .glow-text-warning {
+    text-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+  }
+
+  .glow-text-critical {
+    text-shadow: 0 0 30px rgba(239, 68, 68, 0.7);
+  }
+}
+
+/* Responsive design adjustments */
+@media (max-width: 640px) {
+  .timer-digits {
+    @apply text-5xl;
+  }
+
+  .character-container {
+    @apply w-32 h-32;
+  }
+
+  .control-btn {
+    @apply px-4 py-2 text-sm;
+  }
+}
+
+@media (min-width: 1024px) {
+  .timer-container {
+    @apply gap-12;
+  }
+}
+
+/* Focus states for accessibility */
+@layer components {
+  .control-btn:focus-visible {
+    @apply outline-2 outline-offset-2 outline-white;
+  }
+
+  .duration-input:focus-visible {
+    @apply outline-2 outline-offset-2 outline-blue-500;
+  }
+}
