@@ -1,35 +1,22 @@
+import os
 from functools import lru_cache
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    """Application configuration loaded from environment variables."""
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False,
-    )
+    """Application configuration."""
 
-    database_url: str
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    database_url: str = os.getenv("DATABASE_URL", "postgresql://user:password@localhost:5432/countdown_timer")
+    cors_origins: list[str] = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    debug: bool = environment == "development"
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
 
 
-@lru_cache(maxsize=1)
+@lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
-
-
-DATABASE_URL: str = ""
-CORS_ORIGINS: list[str] = []
-
-
-def _init_module_exports() -> None:
-    """Initialize module-level exports from settings."""
-    global DATABASE_URL, CORS_ORIGINS
-    settings = get_settings()
-    DATABASE_URL = settings.database_url
-    CORS_ORIGINS = settings.cors_origins.split(",")
-
-
-_init_module_exports()

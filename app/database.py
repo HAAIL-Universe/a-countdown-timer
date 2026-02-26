@@ -1,55 +1,59 @@
+import asyncio
+from typing import AsyncGenerator
 import asyncpg
-from typing import Optional
+from contextlib import asynccontextmanager
+import os
 
-from app.config import get_settings
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost/countdown_timer")
 
-
-_pool: Optional[asyncpg.Pool] = None
-
-
-async def create_pool() -> asyncpg.Pool:
-    """Create and initialize the asyncpg connection pool."""
-    global _pool
-    if _pool is not None:
-        return _pool
-    settings = get_settings()
-    _pool = await asyncpg.create_pool(
-        settings.database_url,
-        min_size=5,
-        max_size=20,
-        command_timeout=60,
-    )
-    return _pool
+_pool: asyncpg.Pool | None = None
 
 
 async def get_pool() -> asyncpg.Pool:
-    """Get the active connection pool, or raise if not initialized."""
+    """Get or create the database connection pool."""
+    global _pool
     if _pool is None:
-        raise RuntimeError("Database pool not initialized. Call create_pool() first.")
+        _pool = await asyncpg.create_pool(DATABASE_URL, min_size=5, max_size=20)
     return _pool
 
 
 async def close_pool() -> None:
-    """Close the connection pool."""
+    """Close the database connection pool."""
     global _pool
     if _pool is not None:
         await _pool.close()
         _pool = None
 
 
-class Database:
-    """Backward-compatible Database wrapper for lifespan management."""
-
-    def __init__(self):
-        pass
-
-    async def connect(self) -> None:
-        """Initialize connection pool."""
-        await create_pool()
-
-    async def disconnect(self) -> None:
-        """Close connection pool."""
-        await close_pool()
+@asynccontextmanager
+async def get_connection() -> AsyncGenerator[asyncpg.Connection, None]:
+    """Get a connection from the pool."""
+    pool = await get_pool()
+    conn = await pool.acquire()
+    try:
+        yield conn
+    finally:
+        await pool.release(conn)
 
 
-db = Database()
+async def init_db() -> None:
+    """Initialize the database schema."""
+    async with get_connection() as conn:
+        await conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS timers (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                duration INTEGER NOT NULL,
+                elapsed_time INTEGER NOT NULL DEFAULT 0,
+                status VARCHAR(255) NOT NULL DEFAULT 'idle',
+                urgency_level INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+            );
+            """
+        )
+
+
+async def cleanup_db() -> None:
+    """Cleanup database resources."""
+    await close_pool()
