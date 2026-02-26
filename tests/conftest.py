@@ -1,68 +1,47 @@
-import os
-import asyncio
-from typing import AsyncGenerator
-
 import pytest
-import pytest_asyncio
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from app.database import Base
 from app.main import app
+from app.database import get_db
+from app.models.timer import Timer
+from app.repos.timer_repo import TimerRepository
 
 
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL",
-    "postgresql+asyncpg://user:password@localhost:5432/countdown_timer_test"
-)
-
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Create an event loop for the entire test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture
-async def test_engine():
-    """Create a test database engine."""
-    engine = create_async_engine(
-        TEST_DATABASE_URL,
-        echo=False,
-        future=True,
-        pool_pre_ping=True,
-    )
-    
+@pytest.fixture
+async def test_db_engine():
+    """Create test database engine."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    
+        await conn.run_sync(Timer.metadata.create_all)
     yield engine
-    
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    
     await engine.dispose()
 
 
-@pytest_asyncio.fixture
-async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """Create a test database session."""
-    AsyncTestSessionLocal = sessionmaker(
-        test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-        future=True,
+@pytest.fixture
+async def test_db_session(test_db_engine):
+    """Create test database session."""
+    async_session = async_sessionmaker(
+        test_db_engine, class_=AsyncSession, expire_on_commit=False
     )
-    
-    async with AsyncTestSessionLocal() as session:
+    async with async_session() as session:
         yield session
 
 
-@pytest_asyncio.fixture
-async def client():
-    """Async FastAPI test client for integration tests."""
-    from httpx import AsyncClient
-    async with AsyncClient(app=app, base_url="http://test") as async_client:
-        yield async_client
+@pytest.fixture
+async def test_client(test_db_session):
+    """Create test HTTP client with overridden dependencies."""
+    async def override_get_db():
+        yield test_db_session
+
+    app.dependency_overrides[get_db] = override_get_db
+    async with AsyncClient(app=app, base_url="http://test") as client:
+        yield client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+async def timer_repo(test_db_session):
+    """Create timer repository for tests."""
+    return TimerRepository(test_db_session)
+</
