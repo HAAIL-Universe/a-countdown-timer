@@ -39,4 +39,3 @@ def mock_database(db_mock):
     """Patch the database module with a mock."""
     with patch("app.database.db", db_mock):
         yield db_mock
-</

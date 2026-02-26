@@ -1,10 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from typing import Optional
 from uuid import UUID
 
 from app.services.timer_service import TimerService
-from app.models.timer import Timer
+from app.repos.timer_repo import TimerRepository
 from app.database import get_pool
 
 router = APIRouter(prefix="/api/v1/timers", tags=["timers"])
@@ -34,7 +33,8 @@ class TimerResponse(BaseModel):
 
 async def get_timer_service(pool=Depends(get_pool)) -> TimerService:
     """Inject TimerService with database pool."""
-    return TimerService(pool)
+    repo = TimerRepository(pool)
+    return TimerService(repo)
 
 
 @router.post("", status_code=201, response_model=TimerResponse)
