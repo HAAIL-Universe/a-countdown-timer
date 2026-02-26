@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -7,29 +8,37 @@ from pydantic import BaseModel, Field
 
 class TimerStatus(str, Enum):
     """Timer status enumeration."""
-    idle = "idle"
-    running = "running"
-    paused = "paused"
-    complete = "complete"
+    IDLE = "idle"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETE = "complete"
 
 
 class Timer(BaseModel):
-    """Timer model for database and API."""
-    id: UUID
-    duration: int
-    elapsed_time: int = 0
-    status: TimerStatus = TimerStatus.idle
-    urgency_level: int = 0
-    created_at: datetime
-    updated_at: datetime
+    """Timer domain model."""
+    id: Optional[UUID] = Field(default=None)
+    duration: int = Field(gt=0, description="Duration in seconds")
+    elapsed_time: int = Field(default=0, ge=0, description="Elapsed time in seconds")
+    status: TimerStatus = Field(default=TimerStatus.IDLE)
+    urgency_level: int = Field(default=0, ge=0, le=3)
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
-        from_attributes = True
+        """Pydantic configuration."""
+        use_enum_values = False
 
 
-class CreateTimerRequest(BaseModel):
+class TimerCreate(BaseModel):
     """Request model for creating a timer."""
-    duration: int = Field(..., gt=0, description="Timer duration in seconds")
+    duration: int = Field(gt=0, description="Duration in seconds")
+
+
+class TimerUpdate(BaseModel):
+    """Request model for updating a timer."""
+    duration: Optional[int] = Field(default=None, gt=0)
+    elapsed_time: Optional[int] = Field(default=None, ge=0)
+    status: Optional[TimerStatus] = None
 
 
 class TimerResponse(BaseModel):
@@ -43,10 +52,5 @@ class TimerResponse(BaseModel):
     updated_at: datetime
 
     class Config:
-        from_attributes = True
-
-
-class TimerListResponse(BaseModel):
-    """Response model for listing timers."""
-    items: list[TimerResponse]
-    count: int
+        """Pydantic configuration."""
+        use_enum_values = False
