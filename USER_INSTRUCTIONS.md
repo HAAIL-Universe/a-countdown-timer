@@ -6,13 +6,12 @@ Before you begin, make sure the following software is installed on your Windows 
 
 | Software | Minimum Version | Download Link |
 |---|---|---|
-| Python | 3.10 or newer | https://www.python.org/downloads/ |
-| Node.js (includes npm) | 18.0 or newer | https://nodejs.org/en/download |
-| PostgreSQL | 14.0 or newer | https://www.postgresql.org/download/windows/ |
-| PowerShell | 5.1 or newer (included with Windows 10/11) | Pre-installed on Windows 10/11 |
+| Python | 3.10 | https://www.python.org/downloads/ |
+| Node.js (includes npm) | 18.0 | https://nodejs.org/en/download |
+| PostgreSQL | 14.0 | https://www.postgresql.org/download/windows/ |
+| PowerShell | 5.1 (built into Windows 10/11) | Pre-installed on Windows 10/11 |
 
-**How to check if these are already installed:**
-Open PowerShell (search "PowerShell" in the Start menu) and type the following commands one at a time:
+**To verify your installations**, open PowerShell (search "PowerShell" in the Start menu) and run these commands one at a time:
 
 ```
 python --version
@@ -21,32 +20,35 @@ npm --version
 psql --version
 ```
 
-Each command should print a version number. If you see an error instead, that program needs to be installed.
-
-**PostgreSQL setup note:** During PostgreSQL installation, you will be asked to create a password for the default database user (`postgres`). Write this password down — you will need it in the configuration step.
+Each command should print a version number. If you see an error instead, revisit the installation for that tool.
 
 ---
 
 ## 2. Install
 
-Once all prerequisites are installed, open PowerShell and follow these steps in order.
+Follow these steps in order. All commands are run in **PowerShell**.
 
-**Step 1 — Navigate to the project folder.**
-Replace `C:\path\to\project` with the actual location of the project on your computer:
+**Step 1 — Navigate to the project folder**
+
+Open PowerShell and change into the project's root folder (replace the path with wherever you saved the project):
 
 ```
-cd C:\path\to\project
+cd C:\Users\YourName\countdown-timer
 ```
 
-**Step 2 — Install Python dependencies (for the backend):**
+**Step 2 — Install Python dependencies (backend)**
+
+From the project root folder, run:
 
 ```
 pip install -r requirements.txt
 ```
 
-Wait for this to finish. You will see packages being downloaded and installed.
+This downloads all the Python packages the backend needs. It may take a minute or two.
 
-**Step 3 — Install JavaScript dependencies (for the frontend):**
+**Step 3 — Install JavaScript dependencies (frontend)**
+
+Navigate into the `web` subfolder, then install:
 
 ```
 cd web
@@ -54,94 +56,87 @@ npm install
 cd ..
 ```
 
-Wait for this to finish as well. This may take a minute or two.
+This downloads all the packages the visual interface needs. Return to the root folder with `cd ..` when done.
 
 ---
 
 ## 3. Credential / API Setup
 
-This project does not connect to any third-party paid services or require external API keys.
+No external credentials required.
 
-The only credential you need is access to your **local PostgreSQL database**, which you set up yourself during installation. You will use your PostgreSQL username and password in the configuration step below.
+This project runs entirely on your own computer using a local database. You do not need to sign up for any service or obtain any API keys.
 
 ---
 
 ## 4. Configure .env
 
-The application reads its settings from a file called `.env` located in the main project folder. This file is not included automatically — you must create it from the provided example.
+The `.env` file tells the application how to connect to your database and how to behave. The project includes a ready-made example file to get you started.
 
-**Step 1 — Create your `.env` file.**
-In PowerShell, from the main project folder, run:
+**Create your `.env` file** by running this command from the project root:
 
 ```
 Copy-Item .env.example .env
 ```
 
-**Step 2 — Open the `.env` file** in Notepad or any text editor and review each setting below.
+This creates a copy of the example file named `.env`. You can then open it in any text editor (like Notepad) to make changes.
 
-**Step 3 — Create the database.**
-Before running the app, create a database in PostgreSQL called `timer_db`. Open PowerShell and run:
+**List of every environment variable:**
+
+| Variable | What It Does | Required? | Default Value |
+|---|---|---|---|
+| `DATABASE_URL` | The full address used to connect to your PostgreSQL database, including username, password, host, and database name | Optional | `postgresql://postgres:password@localhost:5432/timer_db` |
+| `CORS_ORIGINS` | Which web addresses are allowed to talk to the backend. Rarely needs changing for local use | Optional | `http://localhost:5173,http://localhost:3000` |
+| `APP_ENV` | Tells the app whether it is running in development or production mode | Optional | `development` |
+| `SERVER_PORT` | The port number the backend server listens on | Optional | `8000` |
+| `SERVER_HOST` | The network address the backend server binds to | Optional | `127.0.0.1` |
+| `DEBUG` | Enables extra logging messages useful for diagnosing problems. Set to `False` in production | Optional | `True` |
+
+**Important:** Update `DATABASE_URL` if your PostgreSQL setup uses a different username, password, or database name than the defaults. For example, if your PostgreSQL password is `mysecret`, change the line to:
+
+```
+DATABASE_URL=postgresql://postgres:mysecret@localhost:5432/timer_db
+```
+
+**Create the database** before running the app for the first time. Open PowerShell and run:
 
 ```
 psql -U postgres -c "CREATE DATABASE timer_db;"
 ```
 
-Enter your PostgreSQL password when prompted.
-
----
-
-### All Environment Variables
-
-| Variable | What It Does | Required? | Default Value |
-|---|---|---|---|
-| `DATABASE_URL` | The full address of your PostgreSQL database, including username, password, and database name. | Optional | `postgresql://postgres:password@localhost:5432/timer_db` |
-| `CORS_ORIGINS` | Tells the backend which web addresses are allowed to talk to it. Leave this as-is for local use. | Optional | `http://localhost:5173,http://localhost:3000` |
-| `APP_ENV` | Sets whether the app runs in development or production mode. Use `development` for local use. | Optional | `development` |
-| `SERVER_PORT` | The port number the backend server listens on. 8000 is the standard default. | Optional | `8000` |
-| `SERVER_HOST` | The network address the backend server runs on. `127.0.0.1` means "this computer only." | Optional | `127.0.0.1` |
-| `DEBUG` | When set to `True`, extra error detail is shown. Helpful for troubleshooting. | Optional | `True` |
-
-**Important:** If your PostgreSQL password is not `password`, update the `DATABASE_URL` line in `.env` to match. For example, if your password is `mysecret`:
+Then apply the database schema:
 
 ```
-DATABASE_URL=postgresql://postgres:mysecret@localhost:5432/timer_db
+psql -U postgres -d timer_db -f migrations/001_create_timers.sql
 ```
 
 ---
 
 ## 5. Run
 
-The project includes a boot script (`boot.ps1`) that starts everything for you automatically.
-
-**To start the application, open PowerShell in the project folder and run:**
+**Start the application** using the included boot script. From the project root folder in PowerShell, run:
 
 ```
 .\boot.ps1
 ```
 
-If PowerShell says the script cannot be run due to security restrictions, first run this command to allow local scripts, then try again:
+If PowerShell blocks the script with a security warning, run this once to allow local scripts, then try again:
 
 ```
-Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
 ```
 
-The boot script will start both the backend (FastAPI) and the frontend (React). Once it's running:
+The boot script starts both the backend and the frontend together. Once it finishes starting up, open your web browser and go to:
 
-- **Frontend (the timer app):** Open your web browser and go to → `http://localhost:5173`
-- **Backend API:** Available at → `http://localhost:8000`
-
-**Development mode (manual alternative):**
-If you prefer to start each part separately, open **two** PowerShell windows.
-
-*Window 1 — Backend:*
 ```
-cd C:\path\to\project
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+http://localhost:5173
 ```
 
-*Window 2 — Frontend:*
+You should see the retro 8-bit countdown timer.
+
+**Development mode only** — To start just the frontend by itself (for example, if the backend is already running separately):
+
 ```
-cd C:\path\to\project\web
+cd web
 npm run dev
 ```
 
@@ -149,12 +144,15 @@ npm run dev
 
 ## 6. Stop
 
-**To stop the application:**
+To stop the application, click on the PowerShell window that is running it and press:
 
-- If you used the boot script (`.\boot.ps1`), click on the PowerShell window and press **Ctrl + C**. Confirm if prompted.
-- If you started the backend and frontend in separate windows, press **Ctrl + C** in each window.
+```
+Ctrl + C
+```
 
-The application will shut down gracefully. It is safe to close the PowerShell windows afterward.
+Hold the **Ctrl** key and press **C**. PowerShell will ask you to confirm — press **Y** then **Enter** if prompted. This safely shuts down both the backend and frontend servers.
+
+If you opened separate PowerShell windows for the backend and frontend, repeat **Ctrl + C** in each window.
 
 ---
 
@@ -162,12 +160,12 @@ The application will shut down gracefully. It is safe to close the PowerShell wi
 
 | Setting | Plain-Language Explanation |
 |---|---|
-| `SERVER_PORT` | Think of a port like a door number on a building. The backend listens for requests on door `8000`. You only need to change this if another program on your computer is already using port 8000. |
-| `SERVER_HOST` | This is the network "address" the backend runs on. `127.0.0.1` means it only accepts connections from your own computer, keeping it private and secure. |
-| `APP_ENV` | Switching this to `production` changes how the app behaves — it hides detailed error messages and is optimized for performance. Leave it as `development` unless you are deploying this publicly. |
-| `DEBUG` | When `True`, the app prints detailed information about errors to help with troubleshooting. Set to `False` if you find the extra output distracting. |
-| `DATABASE_URL` | The full "address" of your database, including who is logging in (`postgres`), the password, the computer it's on (`localhost`), the port (`5432`), and the database name (`timer_db`). |
-| `CORS_ORIGINS` | A security setting that controls which browser addresses can communicate with the backend. If you access the app from an unexpected address, add it here separated by a comma. |
+| `SERVER_PORT` | The "door number" your backend server uses. If another program is already using port `8000`, change this to something else like `8001`. The frontend must also be told about the new port. |
+| `SERVER_HOST` | The network address the backend listens on. The default `127.0.0.1` means "this computer only," which is safe for local use. Do not change this unless you know what you are doing. |
+| `DATABASE_URL` | The full connection string for PostgreSQL. It follows the pattern `postgresql://USERNAME:PASSWORD@HOST:PORT/DATABASE_NAME`. All five parts must match your PostgreSQL setup exactly. |
+| `APP_ENV` | Set to `development` while you are testing. Set to `production` when deploying to a real server. This affects how errors are displayed and how strictly the app behaves. |
+| `DEBUG` | When set to `True`, the app prints detailed messages to help diagnose problems. Set it to `False` for a cleaner experience once everything is working. |
+| `CORS_ORIGINS` | Controls which browser addresses can communicate with the backend. If you change the frontend port away from `5173`, add the new address here separated by a comma. |
 
 ---
 
@@ -175,9 +173,9 @@ The application will shut down gracefully. It is safe to close the PowerShell wi
 
 | Error / Symptom | Likely Cause | Fix |
 |---|---|---|
-| `psycopg2.OperationalError: could not connect to server` | PostgreSQL is not running, or the `DATABASE_URL` password is wrong. | Open the Windows Start menu, search for **Services**, find **postgresql**, and click **Start**. Also double-check the password in your `.env` file. |
-| `.\boot.ps1 cannot be loaded because running scripts is disabled` | PowerShell's security policy is blocking the script. | Run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` in PowerShell and try again. |
-| Browser shows `Cannot connect` or blank page at `localhost:5173` | The frontend (npm) is not running. | Make sure you ran `npm install` inside the `web/` folder and that the boot script or `npm run dev` is still running in PowerShell. |
-| `ModuleNotFoundError` when starting the backend | Python dependencies were not installed, or the wrong Python is being used. | Re-run `pip install -r requirements.txt` from the main project folder. Make sure `python --version` shows 3.10 or newer. |
-| `database "timer_db" does not exist` | The PostgreSQL database was never created. | Run `psql -U postgres -c "CREATE DATABASE timer_db;"` in PowerShell, then restart the app. |
-| Timer data is lost after restarting | The database migration (table setup) may not have run. | Run the migration manually: `psql -U postgres -d timer_db -f migrations/001_create_timers.sql` |
+| `psql: error: connection to server failed` | PostgreSQL is not running or not installed correctly | Open the Windows Start menu, search for "Services," find **postgresql**, and click **Start**. Or reinstall PostgreSQL from https://www.postgresql.org/download/windows/ |
+| `.\boot.ps1 cannot be loaded because running scripts is disabled` | PowerShell script execution is blocked by Windows security policy | Run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` in PowerShell, then try again |
+| Browser shows a blank page or "Cannot connect" at `localhost:5173` | The frontend did not start, or you are using the wrong address | Make sure `npm install` completed without errors inside the `web/` folder. Check PowerShell for error messages and confirm you are visiting `http://localhost:5173` |
+| `pip install` fails with `No module named pip` | Python was installed but `pip` (Python's package installer) is missing or not on your PATH | Reinstall Python from https://www.python.org/downloads/ and check the box that says **"Add Python to PATH"** during setup |
+| `password authentication failed for user "postgres"` | The password in `DATABASE_URL` does not match your PostgreSQL password | Open `.env` in Notepad and update `DATABASE_URL` so the password section matches the one you set when you installed PostgreSQL |
+| Timer data is not saved between sessions / database errors on startup | The database or its tables do not exist yet | Make sure you ran both the `CREATE DATABASE` command and the `psql ... -f migrations/001_create_timers.sql` command from **Section 4** |
