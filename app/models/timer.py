@@ -1,39 +1,72 @@
 from datetime import datetime
 from enum import Enum
+from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class TimerStatus(str, Enum):
-    """Timer state enumeration."""
-    idle = "idle"
-    running = "running"
-    paused = "paused"
-    complete = "complete"
+    """Timer status enumeration."""
+    IDLE = "idle"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETE = "complete"
 
 
 class Timer(BaseModel):
-    """Timer domain model — persisted to DB."""
+    """Timer domain model."""
     id: UUID
-    duration: int = Field(..., gt=0, description="Duration in seconds")
-    elapsed_time: int = Field(default=0, ge=0, description="Elapsed time in seconds")
-    status: TimerStatus = Field(default=TimerStatus.idle)
-    urgency_level: int = Field(default=0, ge=0, le=3)
+    duration: int
+    elapsed_time: int
+    status: TimerStatus
+    urgency_level: int
     created_at: datetime
     updated_at: datetime
 
+    @field_validator("duration")
+    @classmethod
+    def duration_positive(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("duration must be a positive integer")
+        return v
+
+    @field_validator("elapsed_time")
+    @classmethod
+    def elapsed_time_non_negative(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError("elapsed_time must be non-negative")
+        return v
+
+    @field_validator("urgency_level")
+    @classmethod
+    def urgency_level_valid(cls, v: int) -> int:
+        if v not in (0, 1, 2, 3):
+            raise ValueError("urgency_level must be 0, 1, 2, or 3")
+        return v
+
     class Config:
-        from_attributes = True
+        use_enum_values = False
 
 
-class CreateTimerRequest(BaseModel):
-    """Request body for POST /api/v1/timers (create)."""
-    duration: int = Field(..., gt=0, description="Duration in seconds")
+class TimerCreate(BaseModel):
+    """Request payload for creating a timer."""
+    duration: int = Field(..., gt=0, description="Timer duration in seconds")
+
+    class Config:
+        use_enum_values = False
+
+
+class TimerUpdate(BaseModel):
+    """Request payload for updating timer duration."""
+    duration: int = Field(..., gt=0, description="Timer duration in seconds")
+
+    class Config:
+        use_enum_values = False
 
 
 class TimerResponse(BaseModel):
-    """Response body for timer endpoints."""
+    """Response payload for timer endpoints."""
     id: UUID
     duration: int
     elapsed_time: int
@@ -43,10 +76,12 @@ class TimerResponse(BaseModel):
     updated_at: datetime
 
     class Config:
-        from_attributes = True
+        use_enum_values = False
 
 
 class TimerListResponse(BaseModel):
-    """Response body for GET /api/v1/timers."""
-    items: list[TimerResponse]
-    count: int
+    """Response payload for listing timers."""
+    timers: list[TimerResponse]
+
+    class Config:
+        use_enum_values = False
