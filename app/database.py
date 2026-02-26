@@ -1,35 +1,73 @@
 import asyncpg
-from app.config import get_settings
+from typing import Optional
+from contextlib import asynccontextmanager
 
-_pool: asyncpg.Pool | None = None
 
+class Database:
+    """Async PostgreSQL connection pool manager."""
 
-async def create_pool() -> asyncpg.Pool:
-    """Initialize and return the asyncpg connection pool."""
-    global _pool
-    if _pool is not None:
-        return _pool
+    def __init__(self, database_url: str):
+        self.database_url = database_url
+        self.pool: Optional[asyncpg.Pool] = None
+
+    async def connect(self) -> None:
+        """Initialize connection pool."""
+        self.pool = await asyncpg.create_pool(self.database_url)
+
+    async def disconnect(self) -> None:
+        """Close connection pool."""
+        if self.pool:
+            await self.pool.close()
+
+    @asynccontextmanager
+    async def get_connection(self):
+        """Get a connection from the pool."""
+        if not self.pool:
+            raise RuntimeError("Database not connected")
+        async with self.pool.acquire() as conn:
+            yield conn
+
+    async def execute(self, query: str, *args):
+        """Execute a query without returning results."""
+        async with self.get_connection() as conn:
+            return await conn.execute(query, *args)
+
+    async def fetch(self, query: str, *args):
+        """Fetch all rows from a query."""
+        async with self.get_connection() as conn:
+            return await conn.fetch(query, *args)
+
+    async def fetchrow(self, query: str, *args):
+        """Fetch a single row from a query."""
+        async with self.get_connection() as conn:
+            return await conn.fetchrow(query, *args)
+
+    async def fetchval(self, query: str, *args):
+        """Fetch a single value from a query."""
+        async with self.get_connection() as conn:
+            return await conn.fetchval(query, *args)
     
-    settings = get_settings()
-    _pool = await asyncpg.create_pool(
-        settings.DATABASE_URL,
-        min_size=5,
-        max_size=20,
-    )
-    return _pool
+    async def init_schema(self) -> None:
+        """Initialize database schema."""
+        schema_sql = """
+        CREATE TABLE IF NOT EXISTS timers (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            duration INTEGER NOT NULL,
+            elapsed_time INTEGER NOT NULL DEFAULT 0,
+            status VARCHAR(255) NOT NULL DEFAULT 'idle',
+            urgency_level INTEGER NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+        """
+        await self.execute(schema_sql)
 
 
-async def get_pool() -> asyncpg.Pool:
-    """Get the current connection pool (must be initialized via create_pool first)."""
-    global _pool
-    if _pool is None:
-        raise RuntimeError("Database pool not initialized. Call create_pool() first.")
-    return _pool
+db: Optional[Database] = None
 
 
-async def close_pool() -> None:
-    """Close the connection pool and clean up resources."""
-    global _pool
-    if _pool is not None:
-        await _pool.close()
-        _pool = None
+def get_db() -> Database:
+    """Get the global database instance."""
+    if db is None:
+        raise RuntimeError("Database not initialized")
+    return db

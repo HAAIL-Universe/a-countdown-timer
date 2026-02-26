@@ -1,24 +1,25 @@
+from datetime import datetime
 from enum import Enum
 from uuid import UUID
-from datetime import datetime
+
 from pydantic import BaseModel, Field
 
 
 class TimerStatus(str, Enum):
-    """Timer lifecycle states."""
-    idle = "idle"
-    running = "running"
-    paused = "paused"
-    complete = "complete"
+    """Timer status enumeration."""
+    IDLE = "idle"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETE = "complete"
 
 
 class Timer(BaseModel):
-    """Timer entity model (database representation)."""
+    """Timer domain model."""
     id: UUID
-    duration: int
-    elapsed_time: int
-    status: TimerStatus
-    urgency_level: int
+    duration: int = Field(..., gt=0)
+    elapsed_time: int = Field(default=0, ge=0)
+    status: TimerStatus = Field(default=TimerStatus.IDLE)
+    urgency_level: int = Field(default=0, ge=0, le=3)
     created_at: datetime
     updated_at: datetime
 
@@ -26,26 +27,25 @@ class Timer(BaseModel):
         from_attributes = True
 
 
-class CreateTimerRequest(BaseModel):
-    """Request body for creating a new timer."""
-    duration: int = Field(..., gt=0, description="Duration in seconds, must be positive")
+class TimerCreate(BaseModel):
+    """Request model for creating a timer."""
+    duration: int = Field(..., gt=0)
+
+
+class TimerUpdate(BaseModel):
+    """Request model for updating a timer."""
+    duration: int = Field(..., gt=0)
 
 
 class TimerResponse(BaseModel):
-    """Response model for a single timer."""
-    id: UUID
+    """Response model for timer."""
+    id: str
     duration: int
     elapsed_time: int
-    status: TimerStatus
+    status: str
     urgency_level: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: str
+    updated_at: str
 
     class Config:
         from_attributes = True
-
-
-class TimerListResponse(BaseModel):
-    """Response model for listing timers."""
-    items: list[TimerResponse]
-    count: int

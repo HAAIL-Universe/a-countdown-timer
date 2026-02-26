@@ -1,34 +1,27 @@
+import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
-
-from app.config import get_settings
-from app.database import create_pool, close_pool
-from app.routers import health, timers
+from app.database import db
+from app.config import settings
+from app.routers import timers, health
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage database pool lifecycle on app startup/shutdown."""
-    await create_pool()
+    """Manage application startup and shutdown."""
+    await db.connect()
     yield
-    await close_pool()
+    await db.disconnect()
 
 
 def create_app() -> FastAPI:
-    """Create and configure FastAPI application."""
-    app = FastAPI(
-        title="Countdown Timer API",
-        description="A simple countdown timer REST API",
-        version="1.0.0",
-        lifespan=lifespan,
-    )
-
-    settings = get_settings()
+    """Create and configure the FastAPI application."""
+    app = FastAPI(title="Countdown Timer", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
+        allow_origins=settings.cors_origins_list,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

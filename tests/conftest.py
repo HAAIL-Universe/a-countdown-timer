@@ -1,40 +1,54 @@
+import os
 import pytest
-import asyncio
-from unittest.mock import AsyncMock
-from uuid import UUID, uuid4
-from datetime import datetime
-from app.models.timer import Timer, TimerStatus
+from httpx import AsyncClient
+from app.main import create_app
+from app.database import Database, db as global_db
 
 
 @pytest.fixture(scope="session")
-def event_loop():
-    """Single event loop for the entire test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
+def test_database_url():
+    """Provide test database URL, defaulting to test DB if not set."""
+    return os.getenv("TEST_DATABASE_URL", "postgresql://postgres:postgres@localhost/countdown_timer_test")
+
+
+@pytest.fixture(scope="session")
+async def setup_test_db(test_database_url):
+    """Set up test database schema."""
+    test_db = Database(test_database_url)
+    await test_db.connect()
+    await test_db.init_schema()
+    yield test_db
+    await test_db.disconnect()
 
 
 @pytest.fixture
-def mock_repo() -> AsyncMock:
-    """Mock repository for TimerService tests."""
-    return AsyncMock()
-
-
-@pytest.fixture
-def sample_timer_id() -> UUID:
-    """A consistent timer ID for tests."""
-    return uuid4()
-
-
-@pytest.fixture
-def sample_timer(sample_timer_id: UUID) -> Timer:
-    """A sample timer in idle state."""
-    return Timer(
-        id=sample_timer_id,
-        duration=100,
-        elapsed_time=0,
-        status=TimerStatus.idle,
-        urgency_level=0,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
+async def app(setup_test_db, test_database_url, monkeypatch):
+    """Create test FastAPI app with test database."""
+    monkeypatch.setenv("DATABASE_URL", test_database_url)
+    monkeypatch.setenv("CORS_ORIGINS", "http://localhost:5173")
+    
+    import app.config
+    app.config.settings = app.config.Settings(
+        database_url=test_database_url,
+        cors_origins="http://localhost:5173"
     )
+    
+    import app.database
+    app.database.db = setup_test_db
+    
+    test_app = create_app()
+    yield test_app
+
+
+@pytest.fixture
+async def client(app):
+    """Create async test HTTP client."""
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest.fixture(autouse=True)
+async def cleanup_db(setup_test_db):
+    """Clean up database between tests."""
+    yield
+    await setup_test_db.execute("TRUNCATE TABLE timers RESTART IDENTITY;")
