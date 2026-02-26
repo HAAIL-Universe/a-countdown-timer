@@ -1,53 +1,42 @@
+import os
 import pytest
-import asyncpg
+from unittest.mock import AsyncMock, patch, MagicMock
 from httpx import AsyncClient
-from typing import AsyncGenerator
 
-from app.main import create_app
-from app.database import set_pool
+from app.main import app
+from app.database import Database
 
 
-@pytest.fixture
-async def test_pool() -> AsyncGenerator[asyncpg.Pool, None]:
-    """Create and teardown test database pool."""
-    pool = await asyncpg.create_pool(
-        "postgresql://postgres:postgres@localhost:5432/countdown_timer_test",
-        min_size=1,
-        max_size=5,
-    )
-
-    async with pool.acquire() as conn:
-        await conn.execute("""
-            CREATE TABLE IF NOT EXISTS timers (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                duration INTEGER NOT NULL,
-                elapsed_time INTEGER NOT NULL DEFAULT 0,
-                status VARCHAR(255) NOT NULL DEFAULT 'idle',
-                urgency_level INTEGER NOT NULL DEFAULT 0,
-                created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-                updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-            )
-        """)
-
-    yield pool
-
-    async with pool.acquire() as conn:
-        await conn.execute("DROP TABLE IF EXISTS timers CASCADE")
-
-    await pool.close()
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_env():
+    """Set test environment variables before importing config."""
+    os.environ.setdefault("DATABASE_URL", "postgresql://localhost/countdown_timer_test")
+    os.environ.setdefault("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173")
+    yield
+    if "DATABASE_URL" in os.environ and "test" in os.environ["DATABASE_URL"]:
+        del os.environ["DATABASE_URL"]
+    if "CORS_ORIGINS" in os.environ:
+        del os.environ["CORS_ORIGINS"]
 
 
 @pytest.fixture
-async def client(test_pool: asyncpg.Pool) -> AsyncGenerator[AsyncClient, None]:
-    """Create async test client with test database pool."""
-    set_pool(test_pool)
-    app = create_app()
+async def db_mock() -> AsyncMock:
+    """Provide a mocked Database instance."""
+    mock_db = AsyncMock(spec=Database)
+    mock_db.pool = MagicMock()
+    return mock_db
 
+
+@pytest.fixture
+async def client() -> AsyncClient:
+    """Provide an async HTTP client for testing the FastAPI app."""
     async with AsyncClient(app=app, base_url="http://test") as ac:
         yield ac
 
 
 @pytest.fixture
-def anyio_backend():
-    """Use asyncio as the anyio backend for async tests."""
-    return "asyncio"
+def mock_database(db_mock):
+    """Patch the database module with a mock."""
+    with patch("app.database.db", db_mock):
+        yield db_mock
+</

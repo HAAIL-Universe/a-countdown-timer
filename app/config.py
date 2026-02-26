@@ -1,7 +1,18 @@
-import os
+from pydantic_settings import BaseSettings
+from functools import lru_cache
+from typing import Optional
 
-DATABASE_URL: str = os.getenv("DATABASE_URL", "")
-CORS_ORIGINS: list[str] = [
-    origin.strip() for origin in os.getenv("CORS_ORIGINS", "").split(",")
-    if origin.strip()
-]
+
+class Settings(BaseSettings):
+    """Application configuration."""
+    database_url: Optional[str] = None
+    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+
+    class Config:
+        env_file = ".env"
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    """Get cached settings instance."""
+    return Settings()
