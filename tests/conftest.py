@@ -1,36 +1,43 @@
+import os
 import pytest
-import asyncio
-from unittest.mock import AsyncMock
-from uuid import uuid4
-from datetime import datetime
-from app.models.timer import Timer, TimerStatus
+from typing import AsyncGenerator
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from app.main import app
+from app.database import Database, get_db
 
 
-@pytest.fixture(scope="session")
-def event_loop():
-    """Single event loop for the entire test session."""
-    loop = asyncio.new_event_loop()
-    yield loop
-    loop.close()
-
-
-@pytest.fixture
-def mock_repo() -> AsyncMock:
-    """Mock TimerRepo with async methods."""
-    repo = AsyncMock()
-    return repo
+@pytest.fixture(scope="session", autouse=True)
+def set_test_env():
+    """Set environment variables for testing before app imports."""
+    os.environ["DATABASE_URL"] = "postgresql+asyncpg://postgres:postgres@localhost:5432/countdown_timer_test"
+    os.environ["CORS_ORIGINS"] = "http://localhost:3000,http://localhost:5173"
 
 
 @pytest.fixture
-def sample_timer() -> Timer:
-    """Sample Timer instance for testing."""
-    timer_id = uuid4()
-    return Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=50,
-        status=TimerStatus.idle,
-        urgency_level=0,
-        created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow(),
+async def db() -> AsyncGenerator[Database, None]:
+    """Provide test database connection."""
+    db = Database("postgresql+asyncpg://postgres:postgres@localhost:5432/countdown_timer_test")
+    await db.connect()
+    yield db
+    await db.disconnect()
+
+
+@pytest.fixture
+async def client() -> AsyncGenerator[AsyncClient, None]:
+    """Provide async test client for API."""
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
+
+
+@pytest.fixture
+async def async_session_maker():
+    """Provide async session factory for tests."""
+    engine = create_async_engine(
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/countdown_timer_test",
+        echo=False,
     )
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    yield async_session
+    await engine.dispose()
+</
