@@ -1,38 +1,45 @@
-from enum import Enum
-from uuid import UUID
 from datetime import datetime
+from enum import Enum
+from typing import Optional
+from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
 class TimerStatus(str, Enum):
-    """Timer lifecycle states."""
-    idle = "idle"
-    running = "running"
-    paused = "paused"
-    complete = "complete"
+    """Timer status enumeration."""
+    IDLE = "idle"
+    RUNNING = "running"
+    PAUSED = "paused"
+    COMPLETE = "complete"
 
 
 class Timer(BaseModel):
-    """Timer domain model — core entity."""
-    id: UUID
-    duration: int = Field(..., description="Timer duration in seconds")
-    elapsed_time: int = Field(default=0, description="Elapsed time in seconds")
-    status: TimerStatus = Field(default=TimerStatus.idle)
-    urgency_level: int = Field(default=0, description="0–3 urgency scale")
-    created_at: datetime
-    updated_at: datetime
+    """Timer model for database and API."""
+    id: UUID = Field(default_factory=lambda: None)
+    duration: int
+    elapsed_time: int = 0
+    status: TimerStatus = TimerStatus.IDLE
+    urgency_level: int = 0
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     class Config:
         from_attributes = True
 
 
-class CreateTimerRequest(BaseModel):
-    """Request to create a new timer."""
-    duration: int = Field(..., gt=0, description="Duration in seconds (must be positive)")
+class TimerCreateRequest(BaseModel):
+    """Request model for creating a timer."""
+    duration: int = Field(..., gt=0, description="Timer duration in seconds")
+
+
+class TimerUpdateRequest(BaseModel):
+    """Request model for updating timer duration."""
+    duration: int = Field(..., gt=0, description="Timer duration in seconds")
 
 
 class TimerResponse(BaseModel):
-    """API response for a single timer."""
+    """Response model for timer endpoints."""
     id: UUID
     duration: int
     elapsed_time: int
@@ -41,8 +48,5 @@ class TimerResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-
-class TimerListResponse(BaseModel):
-    """API response for timer list."""
-    items: list[TimerResponse]
-    count: int
+    class Config:
+        from_attributes = True
