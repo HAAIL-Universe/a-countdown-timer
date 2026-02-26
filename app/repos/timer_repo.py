@@ -1,29 +1,33 @@
+from datetime import datetime
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
+
 import asyncpg
 
-from app.models.timer import Timer
+from app.models.timer import Timer, TimerStatus
 
 
-class TimerRepository:
-    """Data access layer for Timer entities."""
+class TimerRepo:
+    """Data access layer for Timer entities. All queries are parameterized."""
 
-    def __init__(self, pool: asyncpg.Pool):
-        self.pool = pool
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
 
     async def create(self, duration: int) -> Timer:
         """Create a new timer with given duration."""
         query = """
-            INSERT INTO timers (duration, elapsed_time, status, urgency_level)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO timers (id, duration, elapsed_time, status, urgency_level, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, now(), now())
             RETURNING id, duration, elapsed_time, status, urgency_level, created_at, updated_at
         """
-        row = await self.pool.fetchrow(query, duration, 0, "idle", 0)
+        timer_id = uuid4()
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(query, timer_id, duration, 0, "idle", 0)
         return Timer(
             id=row["id"],
             duration=row["duration"],
             elapsed_time=row["elapsed_time"],
-            status=row["status"],
+            status=TimerStatus(row["status"]),
             urgency_level=row["urgency_level"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -35,33 +39,35 @@ class TimerRepository:
             SELECT id, duration, elapsed_time, status, urgency_level, created_at, updated_at
             FROM timers WHERE id = $1
         """
-        row = await self.pool.fetchrow(query, timer_id)
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(query, timer_id)
         if not row:
             return None
         return Timer(
             id=row["id"],
             duration=row["duration"],
             elapsed_time=row["elapsed_time"],
-            status=row["status"],
+            status=TimerStatus(row["status"]),
             urgency_level=row["urgency_level"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
 
-    async def get_all(self) -> list[Timer]:
+    async def list_all(self) -> list[Timer]:
         """Fetch all timers."""
         query = """
             SELECT id, duration, elapsed_time, status, urgency_level, created_at, updated_at
             FROM timers
             ORDER BY created_at DESC
         """
-        rows = await self.pool.fetch(query)
+        async with self._pool.acquire() as conn:
+            rows = await conn.fetch(query)
         return [
             Timer(
                 id=row["id"],
                 duration=row["duration"],
                 elapsed_time=row["elapsed_time"],
-                status=row["status"],
+                status=TimerStatus(row["status"]),
                 urgency_level=row["urgency_level"],
                 created_at=row["created_at"],
                 updated_at=row["updated_at"],
@@ -69,27 +75,29 @@ class TimerRepository:
             for row in rows
         ]
 
-    async def update(self, timer: Timer) -> Timer:
-        """Update timer state."""
+    async def update(
+        self,
+        timer_id: UUID,
+        elapsed_time: int,
+        status: TimerStatus,
+        urgency_level: int,
+    ) -> Optional[Timer]:
+        """Update timer state and return updated timer."""
         query = """
             UPDATE timers
-            SET duration = $2, elapsed_time = $3, status = $4, urgency_level = $5, updated_at = now()
+            SET elapsed_time = $2, status = $3, urgency_level = $4, updated_at = now()
             WHERE id = $1
             RETURNING id, duration, elapsed_time, status, urgency_level, created_at, updated_at
         """
-        row = await self.pool.fetchrow(
-            query,
-            timer.id,
-            timer.duration,
-            timer.elapsed_time,
-            timer.status,
-            timer.urgency_level,
-        )
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(query, timer_id, elapsed_time, status.value, urgency_level)
+        if not row:
+            return None
         return Timer(
             id=row["id"],
             duration=row["duration"],
             elapsed_time=row["elapsed_time"],
-            status=row["status"],
+            status=TimerStatus(row["status"]),
             urgency_level=row["urgency_level"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
@@ -98,5 +106,6 @@ class TimerRepository:
     async def delete(self, timer_id: UUID) -> bool:
         """Delete a timer by ID."""
         query = "DELETE FROM timers WHERE id = $1"
-        result = await self.pool.execute(query, timer_id)
+        async with self._pool.acquire() as conn:
+            result = await conn.execute(query, timer_id)
         return result == "DELETE 1"
