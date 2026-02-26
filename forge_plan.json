@@ -1,0 +1,666 @@
+{
+  "stack": {
+    "auth": null,
+    "database": "postgresql",
+    "frontend": "react",
+    "test_framework": "pytest",
+    "llm_integration": null,
+    "backend_language": "python",
+    "backend_framework": "fastapi"
+  },
+  "phases": [
+    {
+      "name": "Backend Foundation \u2014 DB, Models & Repo",
+      "number": 0,
+      "purpose": "Establish the PostgreSQL schema, Pydantic models, asyncpg connection pool, and the TimerRepository CRUD layer so all persistence concerns are isolated and testable before any HTTP layer exists.",
+      "exemptions": [],
+      "file_manifest": [
+        {
+          "path": "requirements.txt",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Python dependencies: fastapi, uvicorn, asyncpg, pydantic, pytest, httpx, python-dotenv"
+        },
+        {
+          "path": ".env.example",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Example environment variables file with DATABASE_URL and CORS_ORIGINS placeholders"
+        },
+        {
+          "path": "app/__init__.py",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for app module"
+        },
+        {
+          "path": "app/config.py",
+          "layer": "config",
+          "action": "create",
+          "exports": [
+            "DATABASE_URL: str",
+            "CORS_ORIGINS: list[str]"
+          ],
+          "depends_on": [],
+          "description": "Reads DATABASE_URL and CORS_ORIGINS from environment via python-dotenv"
+        },
+        {
+          "path": "app/database.py",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "async def create_pool() -> asyncpg.Pool",
+            "async def close_pool(pool: asyncpg.Pool) -> None"
+          ],
+          "depends_on": [
+            "app/config.py"
+          ],
+          "description": "asyncpg connection pool creation and teardown helpers used by FastAPI lifespan"
+        },
+        {
+          "path": "app/models/__init__.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for models module"
+        },
+        {
+          "path": "app/models/timer.py",
+          "layer": "model",
+          "action": "create",
+          "exports": [
+            "class TimerStatus(str, Enum): IDLE, RUNNING, PAUSED, DONE",
+            "class Timer(BaseModel): id: UUID, duration: int, elapsed_time: int, status: TimerStatus, urgency_level: float, created_at: datetime, updated_at: datetime",
+            "class CreateTimerRequest(BaseModel): duration: int",
+            "class TimerResponse(BaseModel): id: UUID, duration: int, elapsed_time: int, status: TimerStatus, urgency_level: float, created_at: datetime, updated_at: datetime"
+          ],
+          "depends_on": [],
+          "description": "Pydantic models for Timer entity, create/update request bodies, and API response shapes"
+        },
+        {
+          "path": "app/repos/__init__.py",
+          "layer": "repo",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for repos module"
+        },
+        {
+          "path": "app/repos/timer_repo.py",
+          "layer": "repo",
+          "action": "create",
+          "exports": [
+            "class TimerRepo.__init__(self, pool: asyncpg.Pool)",
+            "async def TimerRepo.create(self, duration: int) -> Timer",
+            "async def TimerRepo.get_by_id(self, timer_id: UUID) -> Timer | None",
+            "async def TimerRepo.update(self, timer_id: UUID, elapsed_time: int, status: TimerStatus, urgency_level: float) -> Timer | None"
+          ],
+          "depends_on": [
+            "app/models/timer.py"
+          ],
+          "description": "TimerRepository with asyncpg-based CRUD: create, get_by_id, update (elapsed_time, status, urgency_level)"
+        },
+        {
+          "path": "migrations/001_create_timers.sql",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "TABLE timers: id UUID PK, duration INTEGER, elapsed_time INTEGER, status VARCHAR(255), urgency_level FLOAT, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ"
+          ],
+          "depends_on": [],
+          "description": "SQL migration creating the timers table with all canonical columns"
+        },
+        {
+          "path": "tests/__init__.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for tests"
+        },
+        {
+          "path": "tests/test_timer_repo.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "app/repos/timer_repo.py",
+            "app/models/timer.py",
+            "app/database.py"
+          ],
+          "description": "Pytest tests for TimerRepo CRUD using an asyncpg test pool against a real local DB"
+        }
+      ],
+      "wires_from_phase": null,
+      "acceptance_criteria": [
+        {
+          "id": "AC-0-1",
+          "test_hint": "manual: psql $DATABASE_URL -f migrations/001_create_timers.sql",
+          "description": "migrations/001_create_timers.sql runs against a local PostgreSQL instance without errors"
+        },
+        {
+          "id": "AC-0-2",
+          "test_hint": "tests/test_timer_repo.py::test_create_timer",
+          "description": "TimerRepo.create returns a Timer with correct duration, IDLE status, and 0 elapsed_time"
+        },
+        {
+          "id": "AC-0-3",
+          "test_hint": "tests/test_timer_repo.py::test_get_nonexistent_timer",
+          "description": "TimerRepo.get_by_id returns None for unknown UUIDs"
+        },
+        {
+          "id": "AC-0-4",
+          "test_hint": "tests/test_timer_repo.py::test_update_timer",
+          "description": "TimerRepo.update persists status, elapsed_time, and urgency_level changes"
+        }
+      ],
+      "schema_tables_claimed": [
+        "timers"
+      ]
+    },
+    {
+      "name": "Backend API \u2014 Service, Routers & FastAPI App",
+      "number": 1,
+      "purpose": "Implement the TimerService urgency engine and all HTTP endpoints (health check, create, start, stop, reset, get), wiring them into a runnable FastAPI application.",
+      "exemptions": [],
+      "file_manifest": [
+        {
+          "path": "app/services/__init__.py",
+          "layer": "service",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for services module"
+        },
+        {
+          "path": "app/services/timer_service.py",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "class TimerService.__init__(self, repo: TimerRepo)",
+            "async def TimerService.create_timer(self, duration: int) -> Timer",
+            "async def TimerService.start_timer(self, timer_id: UUID) -> Timer",
+            "async def TimerService.stop_timer(self, timer_id: UUID) -> Timer",
+            "async def TimerService.reset_timer(self, timer_id: UUID) -> Timer",
+            "async def TimerService.get_timer(self, timer_id: UUID) -> Timer",
+            "def TimerService.calculate_urgency(self, duration: int, elapsed_time: int) -> float",
+            "def TimerService.tick(self, timer: Timer) -> tuple[int, float, TimerStatus]"
+          ],
+          "depends_on": [
+            "app/repos/timer_repo.py",
+            "app/models/timer.py"
+          ],
+          "description": "TimerService: duration validation, urgency_level calculation, and state-machine transitions (start, stop, reset, tick)"
+        },
+        {
+          "path": "app/routers/__init__.py",
+          "layer": "router",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Package marker for routers module"
+        },
+        {
+          "path": "app/routers/health.py",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "router prefix: /health \u2014 GET / \u2192 {status: str}"
+          ],
+          "depends_on": [],
+          "description": "GET /health endpoint returning {status: ok}"
+        },
+        {
+          "path": "app/routers/timers.py",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "router prefix: /api/v1/timers \u2014 POST / (create) \u2192 TimerResponse 201",
+            "router prefix: /api/v1/timers \u2014 GET /{timer_id} \u2192 TimerResponse 200",
+            "router prefix: /api/v1/timers \u2014 POST /{timer_id}/start \u2192 TimerResponse 200",
+            "router prefix: /api/v1/timers \u2014 POST /{timer_id}/stop \u2192 TimerResponse 200",
+            "router prefix: /api/v1/timers \u2014 POST /{timer_id}/reset \u2192 TimerResponse 200"
+          ],
+          "depends_on": [
+            "app/services/timer_service.py",
+            "app/models/timer.py"
+          ],
+          "description": "Timer action endpoints: create, get, start, stop, reset \u2014 all unauthenticated"
+        },
+        {
+          "path": "app/main.py",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [
+            "app: FastAPI (entry point for uvicorn app.main:app)"
+          ],
+          "depends_on": [
+            "app/routers/health.py",
+            "app/routers/timers.py",
+            "app/database.py",
+            "app/config.py"
+          ],
+          "description": "FastAPI application factory with lifespan (pool create/close), CORS middleware, and router registration"
+        },
+        {
+          "path": "tests/test_timers_api.py",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "app/main.py",
+            "app/models/timer.py"
+          ],
+          "description": "Pytest + httpx async tests covering all five timer endpoints and the health check"
+        }
+      ],
+      "wires_from_phase": 0,
+      "acceptance_criteria": [
+        {
+          "id": "AC-1-1",
+          "test_hint": "tests/test_timers_api.py::test_health",
+          "description": "GET /health returns HTTP 200 with {\"status\": \"ok\"}"
+        },
+        {
+          "id": "AC-1-2",
+          "test_hint": "tests/test_timers_api.py::test_create_timer",
+          "description": "POST /api/v1/timers with {\"duration\": 90} returns 201 with a valid UUID and status IDLE"
+        },
+        {
+          "id": "AC-1-3",
+          "test_hint": "tests/test_timers_api.py::test_start_timer",
+          "description": "POST /api/v1/timers/{id}/start transitions status to RUNNING and returns urgency_level 0.0"
+        },
+        {
+          "id": "AC-1-4",
+          "test_hint": "tests/test_timers_api.py::test_stop_timer",
+          "description": "POST /api/v1/timers/{id}/stop transitions status to PAUSED"
+        },
+        {
+          "id": "AC-1-5",
+          "test_hint": "tests/test_timers_api.py::test_reset_timer",
+          "description": "POST /api/v1/timers/{id}/reset returns status IDLE and elapsed_time 0"
+        },
+        {
+          "id": "AC-1-6",
+          "test_hint": "tests/test_timers_api.py::test_create_timer_invalid",
+          "description": "POST /api/v1/timers with duration <= 0 returns HTTP 400 VALIDATION_ERROR"
+        },
+        {
+          "id": "AC-1-7",
+          "test_hint": "manual: uvicorn app.main:app --reload",
+          "description": "uvicorn app.main:app --reload starts without errors and serves requests"
+        }
+      ],
+      "schema_tables_claimed": []
+    },
+    {
+      "name": "React Frontend \u2014 Pixel-Art SPA with Full Timer UI",
+      "number": 2,
+      "purpose": "Build the Vite + React + TypeScript + Tailwind SPA with all UI components (TimerDisplay, FaceCharacter, DurationInput, ControlButtons, UrgencyIndicator), polling the backend API and animating the Pac-Man character based on urgency_level.",
+      "exemptions": [],
+      "file_manifest": [
+        {
+          "path": "web/package.json",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "npm package manifest with react, react-dom, vite, typescript, tailwindcss, vitest, @testing-library/react dependencies"
+        },
+        {
+          "path": "web/tsconfig.json",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "TypeScript compiler config for React + Vite project"
+        },
+        {
+          "path": "web/vite.config.ts",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Vite config with React plugin and dev-proxy to backend at http://localhost:8000"
+        },
+        {
+          "path": "web/tailwind.config.ts",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Tailwind CSS config with content globs covering src/**/*.{ts,tsx}"
+        },
+        {
+          "path": "web/postcss.config.js",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "PostCSS config enabling tailwindcss and autoprefixer plugins"
+        },
+        {
+          "path": "web/index.html",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "HTML entry point loading Press Start 2P from Google Fonts and mounting #root"
+        },
+        {
+          "path": "web/src/main.tsx",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/App.tsx"
+          ],
+          "description": "React 18 root render mounting <App /> into #root"
+        },
+        {
+          "path": "web/src/index.css",
+          "layer": "config",
+          "action": "create",
+          "exports": [],
+          "depends_on": [],
+          "description": "Tailwind base/components/utilities directives and global Press Start 2P font fallback"
+        },
+        {
+          "path": "web/src/types.ts",
+          "layer": "model",
+          "action": "create",
+          "exports": [
+            "type TimerStatus = 'IDLE' | 'RUNNING' | 'PAUSED' | 'DONE'",
+            "type Expression = 'happy' | 'anxious' | 'upset'",
+            "interface TimerResponse { id: string; duration: number; elapsedTime: number; status: TimerStatus; urgencyLevel: number; createdAt: string; updatedAt: string }"
+          ],
+          "depends_on": [],
+          "description": "Shared TypeScript types for timer state and API responses"
+        },
+        {
+          "path": "web/src/api.ts",
+          "layer": "infrastructure",
+          "action": "create",
+          "exports": [
+            "async function createTimer(duration: number): Promise<TimerResponse>",
+            "async function startTimer(id: string): Promise<TimerResponse>",
+            "async function stopTimer(id: string): Promise<TimerResponse>",
+            "async function resetTimer(id: string): Promise<TimerResponse>",
+            "async function getTimer(id: string): Promise<TimerResponse>"
+          ],
+          "depends_on": [
+            "web/src/types.ts"
+          ],
+          "description": "Typed fetch wrapper for all backend endpoints (createTimer, startTimer, stopTimer, resetTimer, getTimer)"
+        },
+        {
+          "path": "web/src/hooks/useTimer.ts",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "function useTimer(): { timer: TimerResponse | null; isLoading: boolean; handleCreate: (duration: number) => Promise<void>; handleStart: () => Promise<void>; handleStop: () => Promise<void>; handleReset: () => Promise<void>; displaySeconds: number }"
+          ],
+          "depends_on": [
+            "web/src/api.ts",
+            "web/src/types.ts"
+          ],
+          "description": "React hook managing timer state, 1-second polling of GET /api/v1/timers/{id}, and frontend tick for countdown display"
+        },
+        {
+          "path": "web/src/utils/urgency.ts",
+          "layer": "service",
+          "action": "create",
+          "exports": [
+            "function urgencyToExpression(urgencyLevel: number): Expression",
+            "function urgencyToColor(urgencyLevel: number): string",
+            "function urgencyToBgClass(urgencyLevel: number): string"
+          ],
+          "depends_on": [
+            "web/src/types.ts"
+          ],
+          "description": "Pure utility: urgencyToExpression (0-0.33\u2192happy, 0.34-0.66\u2192anxious, 0.67-1.0\u2192upset) and urgencyToColor"
+        },
+        {
+          "path": "web/src/components/TimerContainer.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "function TimerContainer({ urgencyLevel, children }: { urgencyLevel: number; children: React.ReactNode }): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/utils/urgency.ts",
+            "web/src/types.ts"
+          ],
+          "description": "Root layout wrapper applying full-viewport centering and dynamic background color/flash animation based on urgency_level"
+        },
+        {
+          "path": "web/src/components/FaceCharacter.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "function FaceCharacter({ expression, urgencyLevel }: { expression: Expression; urgencyLevel: number }): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/types.ts"
+          ],
+          "description": "CSS/SVG pixel-art Pac-Man-style smiley rendering happy|anxious|upset expressions with 200ms animated transitions"
+        },
+        {
+          "path": "web/src/components/TimerDisplay.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "function TimerDisplay({ seconds, urgencyLevel }: { seconds: number; urgencyLevel: number }): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/types.ts"
+          ],
+          "description": "Large HH:MM:SS monospace countdown display; text flashes red/white in final 10 seconds"
+        },
+        {
+          "path": "web/src/components/DurationInput.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "function DurationInput({ initialValue, onSubmit, disabled }: { initialValue: string; onSubmit: (seconds: number) => void; disabled: boolean }): JSX.Element"
+          ],
+          "depends_on": [],
+          "description": "HH:MM:SS format input field, disabled during active countdown, calls onSubmit with total seconds"
+        },
+        {
+          "path": "web/src/components/ControlButtons.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "function ControlButtons({ timerStatus, onStart, onStop, onReset }: { timerStatus: TimerStatus | null; onStart: () => void; onStop: () => void; onReset: () => void }): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/types.ts"
+          ],
+          "description": "Start/Stop/Reset button group with state-driven enable/disable based on timerState prop"
+        },
+        {
+          "path": "web/src/components/UrgencyIndicator.tsx",
+          "layer": "router",
+          "action": "create",
+          "exports": [
+            "function UrgencyIndicator({ urgencyLevel }: { urgencyLevel: number }): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/utils/urgency.ts"
+          ],
+          "description": "Progress bar showing urgency level from 0 to 1 with color-coded zones (green/yellow/red)"
+        },
+        {
+          "path": "web/src/App.tsx",
+          "layer": "entrypoint",
+          "action": "create",
+          "exports": [
+            "function App(): JSX.Element"
+          ],
+          "depends_on": [
+            "web/src/hooks/useTimer.ts",
+            "web/src/utils/urgency.ts",
+            "web/src/components/TimerContainer.tsx",
+            "web/src/components/FaceCharacter.tsx",
+            "web/src/components/TimerDisplay.tsx",
+            "web/src/components/DurationInput.tsx",
+            "web/src/components/ControlButtons.tsx",
+            "web/src/components/UrgencyIndicator.tsx"
+          ],
+          "description": "Root App component composing all child components; consumes useTimer hook; orchestrates full timer UX"
+        },
+        {
+          "path": "web/src/tests/TimerDisplay.test.tsx",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/components/TimerDisplay.tsx"
+          ],
+          "description": "Vitest + React Testing Library tests for TimerDisplay rendering and danger-flash behaviour"
+        },
+        {
+          "path": "web/src/tests/urgency.test.ts",
+          "layer": "test",
+          "action": "create",
+          "exports": [],
+          "depends_on": [
+            "web/src/utils/urgency.ts"
+          ],
+          "description": "Vitest unit tests for urgencyToExpression and urgencyToColor boundary values"
+        }
+      ],
+      "wires_from_phase": 1,
+      "acceptance_criteria": [
+        {
+          "id": "AC-2-1",
+          "test_hint": "manual: cd web && npm install && npm run dev",
+          "description": "npm run dev starts the Vite dev server and the SPA renders on http://localhost:5173 without console errors"
+        },
+        {
+          "id": "AC-2-2",
+          "test_hint": "manual: browser interaction",
+          "description": "User can enter 00:01:30 in DurationInput, click Start, and see the countdown decrement in real time"
+        },
+        {
+          "id": "AC-2-3",
+          "test_hint": "manual: observe during countdown",
+          "description": "Background color transitions green \u2192 yellow \u2192 red as urgency_level crosses 0.33 and 0.66 thresholds"
+        },
+        {
+          "id": "AC-2-4",
+          "test_hint": "manual: observe during countdown",
+          "description": "FaceCharacter expression changes from happy \u2192 anxious \u2192 upset as urgency increases"
+        },
+        {
+          "id": "AC-2-5",
+          "test_hint": "manual: pause/resume flow",
+          "description": "Stop button pauses countdown; Start button resumes from the same point"
+        },
+        {
+          "id": "AC-2-6",
+          "test_hint": "manual: reset flow",
+          "description": "Reset button returns face to happy, clears display, re-enables input"
+        },
+        {
+          "id": "AC-2-7",
+          "test_hint": "web/src/tests/urgency.test.ts",
+          "description": "urgencyToExpression returns correct expression at all three urgency zones (boundary tests)"
+        },
+        {
+          "id": "AC-2-8",
+          "test_hint": "web/src/tests/TimerDisplay.test.tsx",
+          "description": "Text flashes red/white in final 10 seconds of countdown"
+        }
+      ],
+      "schema_tables_claimed": []
+    }
+  ],
+  "summary": {
+    "mode": "greenfield",
+    "one_liner": "A retro 8-bit countdown timer with urgency-driven color shifts and Pac-Man-style animated expressions, backed by FastAPI + PostgreSQL with a React/Vite/TypeScript/Tailwind frontend.",
+    "key_constraints": [
+      "NO auth of any kind \u2014 all endpoints are public and unauthenticated (mini-build rule)",
+      "NO user table or user management (mini-build rule)",
+      "NO Docker files \u2014 dev-local only: uvicorn + npm run dev",
+      "Layer boundaries enforced: routers \u2192 services \u2192 repos; no layer may import its superior",
+      "schema contract has duplicate column declarations; canonical columns are: id, duration, elapsed_time, status, urgency_level, created_at, updated_at",
+      "Physics contract lists duplicate POST /api/v1/timers paths; builder must collapse into distinct action-based endpoints (POST /api/v1/timers, POST /api/v1/timers/{id}/start, POST /api/v1/timers/{id}/stop, POST /api/v1/timers/{id}/reset, GET /api/v1/timers/{id})",
+      "Frontend polls backend; no WebSocket required for MVP",
+      "Press Start 2P font loaded from Google Fonts CDN"
+    ],
+    "stack_rationale": "FastAPI + asyncpg satisfies the async-first Python backend requirement with minimal overhead. React 18 + Vite + TypeScript + Tailwind CSS delivers the pixel-art SPA with fast HMR. PostgreSQL persists timer state across sessions, per schema contract.",
+    "missing_contracts": [],
+    "existing_contracts": [
+      "blueprint.md",
+      "stack.md",
+      "schema.md",
+      "manifesto.md",
+      "physics.yaml",
+      "boundaries.json",
+      "ui.md"
+    ],
+    "boot_script_required": false
+  },
+  "metadata": {
+    "generated_at": "2026-02-25T23:50:31.482404+00:00",
+    "project_name": "countdown-timer",
+    "planner_model": "claude-sonnet-4-6",
+    "schema_version": "1.0"
+  },
+  "contract_refs": [
+    {
+      "note": "Enforces routers\u2192services\u2192repos dependency direction; no DB drivers in routers",
+      "section": "layers",
+      "contract": "boundaries.json"
+    },
+    {
+      "note": "Canonical timers table columns claimed in Phase 0; duplicate declarations in source contract are resolved",
+      "section": "Tables",
+      "contract": "schema.md"
+    },
+    {
+      "note": "Duplicate POST paths collapsed into distinct action sub-routes: /start /stop /reset",
+      "section": "paths",
+      "contract": "physics.yaml"
+    },
+    {
+      "note": "All five components (TimerDisplay, FaceCharacter, DurationInput, ControlButtons, UrgencyIndicator) implemented in Phase 2",
+      "section": "3. Component List",
+      "contract": "ui.md"
+    },
+    {
+      "note": "Color palette, Press Start 2P font, and animation timings encoded in Tailwind config and CSS",
+      "section": "4. Visual Style",
+      "contract": "ui.md"
+    },
+    {
+      "note": "Urgency color shifts and expression progression wired through urgency_level returned by backend",
+      "section": "Core Invariants",
+      "contract": "blueprint.md"
+    },
+    {
+      "note": "DATABASE_URL and CORS_ORIGINS consumed by app/config.py; .env.example provided",
+      "section": "Environment Variables",
+      "contract": "stack.md"
+    }
+  ],
+  "required_contracts": [
+    "blueprint.md",
+    "stack.md",
+    "schema.md",
+    "manifesto.md",
+    "physics.yaml",
+    "boundaries.json",
+    "ui.md"
+  ]
+}
