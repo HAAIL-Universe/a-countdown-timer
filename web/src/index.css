@@ -1,0 +1,135 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply h-full bg-gray-900 text-gray-100 font-sans;
+  }
+
+  #root {
+    @apply h-full flex items-center justify-center;
+  }
+
+  button {
+    @apply transition-all duration-200;
+  }
+
+  input {
+    @apply transition-colors duration-200;
+  }
+}
+
+@layer components {
+  .timer-container {
+    @apply flex flex-col items-center justify-center gap-8 w-full max-w-xl px-4;
+  }
+
+  .timer-display {
+    @apply text-8xl font-mono font-bold text-center tabular-nums;
+  }
+
+  .timer-display-idle {
+    @apply text-green-400;
+  }
+
+  .timer-display-running {
+    @apply text-blue-400;
+  }
+
+  .timer-display-urgent {
+    @apply text-yellow-400;
+  }
+
+  .timer-display-critical {
+    @apply text-red-500 animate-urgency-flash;
+  }
+
+  .character-face {
+    @apply w-48 h-48 md:w-64 md:h-64 flex items-center justify-center;
+  }
+
+  .controls-group {
+    @apply flex flex-wrap gap-4 justify-center w-full;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-danger {
+    @apply px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .duration-input {
+    @apply px-4 py-2 bg-gray-800 border border-gray-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent;
+  }
+
+  .urgency-indicator {
+    @apply absolute inset-0 rounded-xl pointer-events-none;
+  }
+
+  .urgency-idle {
+    @apply bg-green-500 opacity-0;
+  }
+
+  .urgency-running {
+    @apply bg-blue-500 opacity-0;
+  }
+
+  .urgency-urgent {
+    @apply bg-yellow-500 opacity-5;
+  }
+
+  .urgency-critical {
+    @apply bg-red-500 opacity-20 animate-urgency-flash;
+  }
+}
+
+@keyframes urgency-flash {
+  0%, 100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@keyframes pulse-fade {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+@layer utilities {
+  .animate-urgency-flash {
+    animation: urgency-flash 0.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-pulse-fade {
+    animation: pulse-fade 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .font-mono {
+    font-family: 'Courier New', 'JetBrains Mono', monospace;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .disable-user-select {
+    @apply select-none;
+  }
+
+  .cursor-wait-pointer {
+    cursor: wait;
+  }
+}
