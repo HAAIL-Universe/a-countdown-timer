@@ -1,0 +1,89 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-gray-900 text-white font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold;
+  }
+}
+
+@layer components {
+  .timer-display {
+    @apply font-mono text-8xl font-bold tracking-wider;
+  }
+
+  .btn-primary {
+    @apply px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white font-bold rounded-lg transition-colors duration-200;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-bold rounded-lg transition-colors duration-200;
+  }
+
+  .btn-danger {
+    @apply px-6 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg transition-colors duration-200;
+  }
+}
+
+@keyframes flash {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+}
+
+.animate-flash {
+  animation: flash 0.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 1.5s infinite;
+}
+
+.color-idle {
+  @apply bg-green-500;
+}
+
+.color-running {
+  @apply bg-blue-500;
+}
+
+.color-urgent {
+  @apply bg-yellow-400;
+}
+
+.color-critical {
+  @apply bg-red-500;
+}
+
+.text-color-idle {
+  @apply text-green-500;
+}
+
+.text-color-running {
+  @apply text-blue-500;
+}
+
+.text-color-urgent {
+  @apply text-yellow-400;
+}
+
+.text-color-critical {
+  @apply text-red-500;
+}
