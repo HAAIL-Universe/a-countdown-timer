@@ -1,62 +1,75 @@
+import os
 import asyncio
 from typing import AsyncGenerator
 
-import asyncpg
 import pytest
-from fastapi.testclient import TestClient
-from httpx import AsyncClient
+import pytest_asyncio
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.orm import sessionmaker
 
-from app.config import get_settings
-from app.database import init_db
-from app.main import create_app
+from app.database import Base
+from app.main import app
+
+
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL",
+    "postgresql+asyncpg://user:password@localhost:5432/countdown_timer_test"
+)
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> asyncio.AbstractEventLoop:
-    """Create event loop for session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
+def event_loop():
+    """Create an event loop for the entire test session."""
+    loop = asyncio.new_event_loop()
     yield loop
     loop.close()
 
 
-@pytest.fixture
-async def test_db_pool() -> AsyncGenerator[asyncpg.Pool, None]:
-    """Create and tear down test database pool."""
-    settings = get_settings()
-    pool = await asyncpg.create_pool(
-        settings.database_url,
-        min_size=1,
-        max_size=5,
+@pytest_asyncio.fixture
+async def test_engine():
+    """Create a test database engine."""
+    engine = create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        future=True,
+        pool_pre_ping=True,
     )
     
-    await init_db(pool)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     
-    yield pool
+    yield engine
     
-    async with pool.acquire() as conn:
-        await conn.execute("TRUNCATE TABLE timers RESTART IDENTITY")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
     
-    await pool.close()
+    await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def test_session(test_engine) -> AsyncGenerator[AsyncSession, None]:
+    """Create a test database session."""
+    AsyncTestSessionLocal = sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False,
+        future=True,
+    )
+    
+    async with AsyncTestSessionLocal() as session:
+        yield session
 
 
 @pytest.fixture
-async def async_client(test_db_pool: asyncpg.Pool) -> AsyncGenerator[AsyncClient, None]:
-    """Create async HTTP client with test database."""
-    app = create_app()
-    
-    async def override_get_pool():
-        return test_db_pool
-    
-    from app.main import get_pool
-    app.dependency_overrides[get_pool] = override_get_pool
-    
+def client(test_session):
+    """FastAPI test client."""
+    from fastapi.testclient import TestClient
+    return TestClient(app)
+
+
+@pytest_asyncio.fixture
+async def async_client():
+    """Async FastAPI test client."""
+    from httpx import AsyncClient
     async with AsyncClient(app=app, base_url="http://test") as client:
         yield client
-    
-    app.dependency_overrides.clear()
-
-
-@pytest.fixture
-def client(async_client: AsyncClient) -> TestClient:
-    """Synchronous test client for convenience."""
-    return TestClient(async_client.app)

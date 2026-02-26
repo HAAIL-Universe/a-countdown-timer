@@ -1,53 +1,36 @@
+import os
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.config import get_settings
-from app.database import close_pool, create_pool, get_pool
-from app.repos.timer_repo import TimerRepo
+from app.config import CORS_ORIGINS, ENVIRONMENT
+from app.database import close_db, init_db
 from app.routers import health, timers
-from app.services.timer_service import TimerService
-
-
-async def get_timer_service() -> TimerService:
-    """Dependency: Provide TimerService with initialized pool."""
-    pool = await get_pool()
-    repo = TimerRepo(pool)
-    return TimerService(repo)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Manage application startup and shutdown."""
-    await create_pool()
+    """Manage app lifecycle: startup and shutdown."""
+    await init_db()
     yield
-    await close_pool()
+    await close_db()
 
 
-def create_app() -> FastAPI:
-    """Create and configure FastAPI application."""
-    settings = get_settings()
-    
-    app = FastAPI(
-        title="Timer API",
-        description="A countdown timer service",
-        version="1.0.0",
-        lifespan=lifespan,
-    )
-    
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-    
-    app.include_router(health.router)
-    app.include_router(timers.router, dependencies=[Depends(get_timer_service)])
-    
-    return app
+app = FastAPI(
+    title="Countdown Timer",
+    description="A retro countdown timer with character animation and color shifts",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-app = create_app()
+app.include_router(health.router)
+app.include_router(timers.router, prefix="/api/v1")
