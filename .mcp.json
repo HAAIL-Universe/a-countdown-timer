@@ -1,0 +1,66 @@
+{
+  "mcpServers": {
+    "forgeguard": {
+      "command": "python",
+      "args": [
+        "-m",
+        "forgeguard_mcp"
+      ],
+      "cwd": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc/forgeguard-mcp",
+      "env": {
+        "PYTHONPATH": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc/forgeguard-mcp",
+        "FORGEGUARD_API_URL": "http://localhost:8000",
+        "FORGE_API_KEY": "fg_MHp23ur3p_SKkW-zYKZzTKH23hLYImflGFfqAqynuC_wL4x2o2P9aA"
+      }
+    },
+    "devmcp": {
+      "command": "python",
+      "args": [
+        "-m",
+        "devmcp"
+      ],
+      "cwd": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc",
+      "env": {
+        "PYTHONPATH": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc",
+        "FORGEGUARD_ROOT": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc/ForgeGuard",
+        "FORGEGUARD_API_URL": "http://localhost:8000",
+        "FORGE_API_KEY": "fg_MHp23ur3p_SKkW-zYKZzTKH23hLYImflGFfqAqynuC_wL4x2o2P9aA"
+      }
+    },
+    "forgeobs": {
+      "command": "python",
+      "args": [
+        "-m",
+        "forgeobs"
+      ],
+      "cwd": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc",
+      "env": {
+        "PYTHONPATH": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc",
+        "FORGE_LOG_PATH": "Z:/ForgeCollection/logs/forge.log",
+        "FORGE_APP_LOG_PATH": "Z:/ForgeCollection/logs/app.log"
+      }
+    },
+    "forgebench": {
+      "command": "python",
+      "args": [
+        "-m",
+        "forgebench"
+      ],
+      "cwd": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc",
+      "env": {
+        "PYTHONPATH": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc"
+      }
+    },
+    "forgememory": {
+      "command": "python",
+      "args": [
+        "-m",
+        "forgememory"
+      ],
+      "cwd": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc",
+      "env": {
+        "PYTHONPATH": "Z:\\Forge Elements\\binaries\\forgeguard-backend-x86_64-pc-windows-msvc"
+      }
+    }
+  }
+}

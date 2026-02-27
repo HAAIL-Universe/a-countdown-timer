@@ -22,6 +22,10 @@ Write-Host "  Virtual environment activated" -ForegroundColor Green
 # Step 4: Install dependencies
 Write-Host "  Installing dependencies..."
 pip install -r requirements.txt
+Write-Host "  Installing dependencies in web/..."
+Push-Location web
+npm install
+Pop-Location
 
 # Step 5: Check environment configuration
 if ((-not (Test-Path "./.env")) -and (Test-Path "./.env.example")) {
@@ -38,4 +42,6 @@ Write-Host "  Running database migrations..."
 # Step 8: Start the app
 Write-Host ''
 Write-Host "=== Starting Blueprint: Countdown Timer ===" -ForegroundColor Cyan
-python -m app.main
+Push-Location web
+npm run dev
+Pop-Location
