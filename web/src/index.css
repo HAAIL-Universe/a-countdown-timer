@@ -1,0 +1,228 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-idle: #22C55E;
+    --color-running: #3B82F6;
+    --color-urgent: #FBBF24;
+    --color-critical: #EF4444;
+    --color-bg-dark: #1F2937;
+    --color-text-primary: #F3F4F6;
+    --color-border: #374151;
+  }
+
+  * {
+    @apply antialiased;
+  }
+
+  html,
+  body {
+    @apply w-full h-screen bg-slate-900 text-white overflow-hidden;
+  }
+
+  body {
+    @apply m-0 p-0;
+  }
+
+  #root {
+    @apply w-full h-full flex flex-col items-center justify-center;
+  }
+}
+
+@layer components {
+  .timer-digit {
+    @apply font-mono text-6xl font-bold tracking-wider;
+  }
+
+  .timer-label {
+    @apply text-sm uppercase tracking-widest text-gray-400 mt-4;
+  }
+
+  .btn-base {
+    @apply px-6 py-3 font-semibold rounded-lg transition-all duration-200 text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply btn-base bg-emerald-500 hover:bg-emerald-600 focus:ring-emerald-500;
+  }
+
+  .btn-secondary {
+    @apply btn-base bg-blue-500 hover:bg-blue-600 focus:ring-blue-500;
+  }
+
+  .btn-danger {
+    @apply btn-base bg-red-500 hover:bg-red-600 focus:ring-red-500;
+  }
+
+  .timer-container {
+    @apply flex flex-col items-center justify-center gap-8 w-full h-full max-w-2xl px-4;
+  }
+
+  .character-container {
+    @apply flex flex-col items-center gap-4;
+  }
+
+  .character-face {
+    @apply w-64 h-64 md:w-80 md:h-80 flex items-center justify-center transition-transform duration-300;
+  }
+
+  .controls-group {
+    @apply flex flex-wrap gap-3 justify-center mt-4;
+  }
+
+  .input-field {
+    @apply px-4 py-2 rounded-lg bg-slate-800 text-white border border-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 placeholder-gray-500;
+  }
+}
+
+@keyframes urgency-flash {
+  0% {
+    background-color: rgb(239, 68, 68);
+    opacity: 1;
+  }
+  50% {
+    background-color: rgb(248, 113, 113);
+    opacity: 0.7;
+  }
+  100% {
+    background-color: rgb(239, 68, 68);
+    opacity: 1;
+  }
+}
+
+@keyframes urgency-color-shift-yellow {
+  0% {
+    color: rgb(59, 130, 246);
+  }
+  100% {
+    color: rgb(251, 191, 36);
+  }
+}
+
+@keyframes urgency-color-shift-red {
+  0% {
+    color: rgb(251, 191, 36);
+  }
+  100% {
+    color: rgb(239, 68, 68);
+  }
+}
+
+@keyframes pulse-urgent {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.8;
+  }
+}
+
+@layer utilities {
+  .animate-flash-critical {
+    animation: urgency-flash 0.5s infinite;
+  }
+
+  .animate-color-to-yellow {
+    animation: urgency-color-shift-yellow 0.3s ease-in-out forwards;
+  }
+
+  .animate-color-to-red {
+    animation: urgency-color-shift-red 0.3s ease-in-out forwards;
+  }
+
+  .animate-pulse-urgent {
+    animation: pulse-urgent 0.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .text-idle {
+    @apply text-emerald-500;
+  }
+
+  .text-running {
+    @apply text-blue-500;
+  }
+
+  .text-urgent {
+    @apply text-yellow-400;
+  }
+
+  .text-critical {
+    @apply text-red-500;
+  }
+
+  .bg-idle {
+    @apply bg-emerald-500 bg-opacity-10;
+  }
+
+  .bg-running {
+    @apply bg-blue-500 bg-opacity-10;
+  }
+
+  .bg-urgent {
+    @apply bg-yellow-400 bg-opacity-10;
+  }
+
+  .bg-critical {
+    @apply bg-red-500 bg-opacity-20;
+  }
+
+  .border-idle {
+    @apply border-emerald-500 border-opacity-30;
+  }
+
+  .border-running {
+    @apply border-blue-500 border-opacity-30;
+  }
+
+  .border-urgent {
+    @apply border-yellow-400 border-opacity-30;
+  }
+
+  .border-critical {
+    @apply border-red-500 border-opacity-50;
+  }
+}
+
+@layer components {
+  .timer-display-base {
+    @apply timer-digit transition-all duration-300;
+  }
+
+  .timer-display-idle {
+    @apply timer-display-base text-idle;
+  }
+
+  .timer-display-running {
+    @apply timer-display-base text-running;
+  }
+
+  .timer-display-urgent {
+    @apply timer-display-base text-urgent;
+  }
+
+  .timer-display-critical {
+    @apply timer-display-base text-critical animate-flash-critical;
+  }
+
+  .urgency-container {
+    @apply relative rounded-xl border-2 p-8 transition-all duration-300;
+  }
+
+  .urgency-container.idle {
+    @apply bg-idle border-idle;
+  }
+
+  .urgency-container.running {
+    @apply bg-running border-running;
+  }
+
+  .urgency-container.urgent {
+    @apply bg-urgent border-urgent;
+  }
+
+  .urgency-container.critical {
+    @apply bg-critical border-critical animate-pulse-urgent;
+  }
+}
