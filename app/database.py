@@ -1,34 +1,41 @@
 import asyncpg
-from app.config import DATABASE_URL
+from typing import AsyncGenerator
+from contextlib import asynccontextmanager
+import os
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://localhost/countdown_timer")
 
 _pool: asyncpg.Pool | None = None
 
 
-async def create_pool() -> asyncpg.Pool:
-    """Create and initialize the asyncpg connection pool."""
+async def init_db() -> None:
+    """Initialize database connection pool."""
     global _pool
-    if _pool is not None:
-        return _pool
-    
-    _pool = await asyncpg.create_pool(
-        DATABASE_URL,
-        min_size=5,
-        max_size=20,
-        command_timeout=30,
-    )
-    return _pool
+    _pool = await asyncpg.create_pool(DATABASE_URL, min_size=5, max_size=20)
 
 
-async def get_pool() -> asyncpg.Pool:
-    """Get the initialized connection pool; create if not already exists."""
-    if _pool is None:
-        return await create_pool()
-    return _pool
-
-
-async def close_pool() -> None:
-    """Close and cleanup the connection pool."""
+async def close_db() -> None:
+    """Close database connection pool."""
     global _pool
-    if _pool is not None:
+    if _pool:
         await _pool.close()
         _pool = None
+
+
+async def get_db() -> AsyncGenerator[asyncpg.Connection, None]:
+    """Get a database connection from the pool."""
+    global _pool
+    if not _pool:
+        raise RuntimeError("Database not initialized")
+    async with _pool.acquire() as conn:
+        yield conn
+
+
+@asynccontextmanager
+async def get_db_context() -> AsyncGenerator[asyncpg.Connection, None]:
+    """Context manager for database connections."""
+    global _pool
+    if not _pool:
+        raise RuntimeError("Database not initialized")
+    async with _pool.acquire() as conn:
+        yield conn

@@ -1,104 +1,121 @@
-from datetime import datetime
 from uuid import UUID
-
+from datetime import datetime
+from typing import Optional, List
 import asyncpg
-from pydantic import ValidationError
-
-from app.models.timer import Timer, TimerStatus
+from app.models.timer import Timer
 
 
 class TimerRepository:
-    """Data access layer for Timer entities."""
+    """Repository for Timer persistence."""
 
     def __init__(self, pool: asyncpg.Pool):
-        """Initialize with asyncpg connection pool."""
         self.pool = pool
 
-    async def create(self, timer: Timer) -> Timer:
-        """Create a new timer in the database."""
-        now = datetime.utcnow()
+    async def create(self, duration: int) -> Timer:
+        """Create a new timer with given duration."""
         query = """
             INSERT INTO timers (duration, elapsed_time, status, urgency_level, created_at, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING id, duration, elapsed_time, status, urgency_level, created_at, updated_at
         """
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                query,
-                timer.duration,
-                timer.elapsed_time,
-                timer.status.value,
-                timer.urgency_level,
-                now,
-                now,
-            )
-        if not row:
-            raise RuntimeError("Failed to create timer")
-        return self._row_to_timer(row)
+        now = datetime.utcnow()
+        row = await self.pool.fetchrow(
+            query,
+            duration,
+            0,
+            "idle",
+            0,
+            now,
+            now,
+        )
+        return Timer(
+            id=row["id"],
+            duration=row["duration"],
+            elapsed_time=row["elapsed_time"],
+            status=row["status"],
+            urgency_level=row["urgency_level"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
-    async def get_by_id(self, timer_id: UUID) -> Timer | None:
-        """Fetch timer by ID."""
+    async def get_by_id(self, timer_id: UUID) -> Optional[Timer]:
+        """Fetch a timer by ID."""
         query = """
             SELECT id, duration, elapsed_time, status, urgency_level, created_at, updated_at
             FROM timers
             WHERE id = $1
         """
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(query, timer_id)
+        row = await self.pool.fetchrow(query, timer_id)
         if not row:
             return None
-        return self._row_to_timer(row)
+        return Timer(
+            id=row["id"],
+            duration=row["duration"],
+            elapsed_time=row["elapsed_time"],
+            status=row["status"],
+            urgency_level=row["urgency_level"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
 
-    async def list_all(self) -> list[Timer]:
+    async def list_all(self) -> List[Timer]:
         """Fetch all timers."""
         query = """
             SELECT id, duration, elapsed_time, status, urgency_level, created_at, updated_at
             FROM timers
             ORDER BY created_at DESC
         """
-        async with self.pool.acquire() as conn:
-            rows = await conn.fetch(query)
-        return [self._row_to_timer(row) for row in rows]
+        rows = await self.pool.fetch(query)
+        return [
+            Timer(
+                id=row["id"],
+                duration=row["duration"],
+                elapsed_time=row["elapsed_time"],
+                status=row["status"],
+                urgency_level=row["urgency_level"],
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+            )
+            for row in rows
+        ]
 
-    async def update(self, timer: Timer) -> Timer:
-        """Update an existing timer."""
-        now = datetime.utcnow()
-        query = """
+    async def update(self, timer_id: UUID, **kwargs) -> Optional[Timer]:
+        """Update timer fields and return updated record."""
+        allowed_fields = {
+            "duration",
+            "elapsed_time",
+            "status",
+            "urgency_level",
+        }
+        updates = {k: v for k, v in kwargs.items() if k in allowed_fields}
+        if not updates:
+            return await self.get_by_id(timer_id)
+
+        updates["updated_at"] = datetime.utcnow()
+        set_clause = ", ".join([f"{k} = ${i+1}" for i, k in enumerate(updates.keys())])
+        values = list(updates.values())
+
+        query = f"""
             UPDATE timers
-            SET duration = $1, elapsed_time = $2, status = $3, urgency_level = $4, updated_at = $5
-            WHERE id = $6
+            SET {set_clause}
+            WHERE id = ${len(values) + 1}
             RETURNING id, duration, elapsed_time, status, urgency_level, created_at, updated_at
         """
-        async with self.pool.acquire() as conn:
-            row = await conn.fetchrow(
-                query,
-                timer.duration,
-                timer.elapsed_time,
-                timer.status.value,
-                timer.urgency_level,
-                now,
-                timer.id,
-            )
+        row = await self.pool.fetchrow(query, *values, timer_id)
         if not row:
-            raise RuntimeError(f"Timer {timer.id} not found")
-        return self._row_to_timer(row)
-
-    async def delete(self, timer_id: UUID) -> bool:
-        """Delete a timer by ID."""
-        query = "DELETE FROM timers WHERE id = $1"
-        async with self.pool.acquire() as conn:
-            result = await conn.execute(query, timer_id)
-        return result == "DELETE 1"
-
-    @staticmethod
-    def _row_to_timer(row: asyncpg.Record) -> Timer:
-        """Convert database row to Timer model."""
+            return None
         return Timer(
             id=row["id"],
             duration=row["duration"],
             elapsed_time=row["elapsed_time"],
-            status=TimerStatus(row["status"]),
+            status=row["status"],
             urgency_level=row["urgency_level"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    async def delete(self, timer_id: UUID) -> bool:
+        """Delete a timer by ID."""
+        query = "DELETE FROM timers WHERE id = $1"
+        result = await self.pool.execute(query, timer_id)
+        return result == "DELETE 1"
