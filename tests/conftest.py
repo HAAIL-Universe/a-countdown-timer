@@ -1,44 +1,42 @@
-import pytest
 import asyncio
-from datetime import datetime
-from unittest.mock import AsyncMock
-from uuid import UUID, uuid4
+import os
+from typing import AsyncGenerator
 
-from app.models.timer import Timer, TimerStatus
-from app.services.timer_service import TimerService
+import pytest
+import pytest_asyncio
+from httpx import AsyncClient
+
+from app.config import get_settings
+from app.database import DatabasePool
+from app.main import create_app
 
 
 @pytest.fixture(scope="session")
 def event_loop():
-    """Single event loop for the entire test session."""
-    loop = asyncio.new_event_loop()
+    """Create event loop for async tests."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
 
 
-@pytest.fixture
-def mock_repo() -> AsyncMock:
-    """Mock TimerRepo with async methods."""
-    repo = AsyncMock()
-    return repo
+@pytest_asyncio.fixture
+async def app():
+    """Create test app with database."""
+    os.environ["DATABASE_URL"] = "postgresql://postgres:postgres@localhost:5432/countdown_timer_test"
+    await DatabasePool.initialize()
+    _app = create_app()
+    yield _app
+    await DatabasePool.close()
+
+
+@pytest_asyncio.fixture
+async def client(app) -> AsyncGenerator:
+    """Create async HTTP client for testing."""
+    async with AsyncClient(app=app, base_url="http://test") as _client:
+        yield _client
 
 
 @pytest.fixture
-def timer_service(mock_repo: AsyncMock) -> TimerService:
-    """TimerService instance with mocked repository."""
-    return TimerService(repo=mock_repo)
-
-
-@pytest.fixture
-def sample_timer() -> Timer:
-    """Sample timer for test data."""
-    timer_id = uuid4()
-    return Timer(
-        id=timer_id,
-        duration=60,
-        elapsed_time=0,
-        status=TimerStatus.idle,
-        urgency_level=0,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-    )
+def settings():
+    """Return test settings."""
+    return get_settings()

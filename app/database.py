@@ -1,34 +1,47 @@
 import asyncpg
-from app.config import get_settings
-
-_pool: asyncpg.Pool | None = None
-
-
-async def create_pool() -> asyncpg.Pool:
-    """Create and cache the asyncpg connection pool."""
-    global _pool
-    if _pool is None:
-        settings = get_settings()
-        _pool = await asyncpg.create_pool(
-            settings.database_url,
-            min_size=5,
-            max_size=20,
-            command_timeout=60,
-        )
-    return _pool
+from typing import Optional
+from contextlib import asynccontextmanager
 
 
-async def get_pool() -> asyncpg.Pool:
-    """Retrieve the cached connection pool, creating it if needed."""
-    global _pool
-    if _pool is None:
-        await create_pool()
-    return _pool
+class Database:
+    """Database connection pool manager."""
 
+    def __init__(self, database_url: str):
+        self.database_url = database_url
+        self.pool: Optional[asyncpg.Pool] = None
 
-async def close_pool() -> None:
-    """Close the connection pool and clear the cache."""
-    global _pool
-    if _pool is not None:
-        await _pool.close()
-        _pool = None
+    async def connect(self) -> None:
+        """Initialize connection pool."""
+        self.pool = await asyncpg.create_pool(self.database_url)
+
+    async def disconnect(self) -> None:
+        """Close connection pool."""
+        if self.pool:
+            await self.pool.close()
+
+    @asynccontextmanager
+    async def acquire(self):
+        """Acquire a connection from pool."""
+        async with self.pool.acquire() as conn:
+            yield conn
+
+    async def execute(self, query: str, *args) -> None:
+        """Execute a query without returning results."""
+        async with self.acquire() as conn:
+            await conn.execute(query, *args)
+
+    async def fetch(self, query: str, *args) -> list:
+        """Fetch multiple rows."""
+        async with self.acquire() as conn:
+            return await conn.fetch(query, *args)
+
+    async def fetchrow(self, query: str, *args) -> Optional[dict]:
+        """Fetch single row."""
+        async with self.acquire() as conn:
+            return await conn.fetchrow(query, *args)
+
+    async def fetchval(self, query: str, *args) -> Optional[any]:
+        """Fetch single value."""
+        async with self.acquire() as conn:
+            return await conn.fetchval(query, *args)
+</result>
