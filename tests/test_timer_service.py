@@ -1,384 +1,221 @@
 import pytest
-from uuid import UUID, uuid4
 from datetime import datetime
-from unittest.mock import AsyncMock
+from uuid import uuid4
 from app.services.timer_service import TimerService
 from app.models.timer import Timer, TimerStatus
+from app.repos.timer_repo import TimerRepository
 
 
-@pytest.fixture
-def mock_repo() -> AsyncMock:
-    """Mock TimerRepo for testing TimerService."""
-    return AsyncMock()
+class MockTimerRepository(TimerRepository):
+    """Mock repository for testing."""
 
+    def __init__(self):
+        """Initialize mock repository with in-memory storage."""
+        self.timers = {}
 
-@pytest.fixture
-def service(mock_repo: AsyncMock) -> TimerService:
-    """TimerService instance with mocked repo."""
-    return TimerService(repo=mock_repo)
-
-
-@pytest.fixture
-def sample_timer() -> Timer:
-    """Sample Timer instance for testing."""
-    now = datetime.now()
-    return Timer(
-        id=uuid4(),
-        duration=100,
-        elapsed_time=0,
-        status=TimerStatus.idle,
-        urgency_level=0,
-        created_at=now,
-        updated_at=now,
-    )
-
-
-@pytest.mark.asyncio
-async def test_compute_urgency_levels(service: TimerService):
-    """TimerService.compute_urgency returns correct levels based on elapsed_time/duration ratio."""
-    # 0–33% elapsed → urgency 0
-    assert service.compute_urgency(0, 100) == 0
-    assert service.compute_urgency(32, 100) == 0
-    assert service.compute_urgency(33, 100) == 0
-
-    # 33–66% elapsed → urgency 1
-    assert service.compute_urgency(34, 100) == 1
-    assert service.compute_urgency(50, 100) == 1
-    assert service.compute_urgency(65, 100) == 1
-
-    # 66–90% elapsed → urgency 2
-    assert service.compute_urgency(66, 100) == 2
-    assert service.compute_urgency(75, 100) == 2
-    assert service.compute_urgency(89, 100) == 2
-
-    # 90%+ elapsed → urgency 3
-    assert service.compute_urgency(90, 100) == 3
-    assert service.compute_urgency(95, 100) == 3
-    assert service.compute_urgency(100, 100) == 3
-
-    # Edge case: duration <= 0 returns 0
-    assert service.compute_urgency(10, 0) == 0
-    assert service.compute_urgency(10, -1) == 0
-
-
-@pytest.mark.asyncio
-async def test_create_timer_sets_idle_status(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """TimerRepo.create inserts a row with status=idle and elapsed_time=0."""
-    created_timer = Timer(
-        id=uuid4(),
-        duration=60,
-        elapsed_time=0,
-        status=TimerStatus.idle,
-        urgency_level=0,
-        created_at=datetime.now(),
-        updated_at=datetime.now(),
-    )
-    mock_repo.create.return_value = created_timer
-
-    result = await service.create_timer(60)
-
-    assert result.status == TimerStatus.idle
-    assert result.elapsed_time == 0
-    assert isinstance(result.id, UUID)
-    mock_repo.create.assert_called_once_with(60)
-
-
-@pytest.mark.asyncio
-async def test_start_timer_sets_running_status(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """Starting a timer changes status to running and recomputes urgency."""
-    timer_id = uuid4()
-    mock_repo.get_by_id.return_value = sample_timer
-
-    updated_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=0,
-        status=TimerStatus.running,
-        urgency_level=0,
-        created_at=sample_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.update.return_value = updated_timer
-
-    result = await service.start_timer(timer_id)
-
-    assert result.status == TimerStatus.running
-    mock_repo.get_by_id.assert_called_once_with(timer_id)
-    mock_repo.update.assert_called_once_with(timer_id, 0, TimerStatus.running, 0)
-
-
-@pytest.mark.asyncio
-async def test_stop_timer_sets_paused_status(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """Stopping a timer changes status to paused and recomputes urgency."""
-    timer_id = uuid4()
-    running_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=50,
-        status=TimerStatus.running,
-        urgency_level=1,
-        created_at=sample_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.get_by_id.return_value = running_timer
-
-    paused_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=50,
-        status=TimerStatus.paused,
-        urgency_level=1,
-        created_at=running_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.update.return_value = paused_timer
-
-    result = await service.stop_timer(timer_id)
-
-    assert result.status == TimerStatus.paused
-    assert result.elapsed_time == 50
-    mock_repo.get_by_id.assert_called_once_with(timer_id)
-    mock_repo.update.assert_called_once_with(timer_id, 50, TimerStatus.paused, 1)
-
-
-@pytest.mark.asyncio
-async def test_reset_timer_clears_elapsed_time(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """Resetting a timer sets elapsed_time=0 and status=idle."""
-    timer_id = uuid4()
-    running_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=75,
-        status=TimerStatus.running,
-        urgency_level=2,
-        created_at=sample_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.get_by_id.return_value = running_timer
-
-    reset_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=0,
-        status=TimerStatus.idle,
-        urgency_level=0,
-        created_at=running_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.update.return_value = reset_timer
-
-    result = await service.reset_timer(timer_id)
-
-    assert result.elapsed_time == 0
-    assert result.status == TimerStatus.idle
-    assert result.urgency_level == 0
-    mock_repo.get_by_id.assert_called_once_with(timer_id)
-    mock_repo.update.assert_called_once_with(timer_id, 0, TimerStatus.idle, 0)
-
-
-@pytest.mark.asyncio
-async def test_tick_timer_increments_elapsed_time(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """Ticking a timer increments elapsed_time by 1 second."""
-    timer_id = uuid4()
-    ticking_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=10,
-        status=TimerStatus.running,
-        urgency_level=0,
-        created_at=sample_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.get_by_id.return_value = ticking_timer
-
-    ticked_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=11,
-        status=TimerStatus.running,
-        urgency_level=0,
-        created_at=ticking_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.update.return_value = ticked_timer
-
-    result = await service.tick_timer(timer_id)
-
-    assert result.elapsed_time == 11
-    mock_repo.update.assert_called_once_with(timer_id, 11, TimerStatus.running, 0)
-
-
-@pytest.mark.asyncio
-async def test_tick_timer_caps_at_duration(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """Ticking a timer at duration marks it complete."""
-    timer_id = uuid4()
-    near_complete_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=99,
-        status=TimerStatus.running,
-        urgency_level=3,
-        created_at=sample_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.get_by_id.return_value = near_complete_timer
-
-    complete_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=100,
-        status=TimerStatus.complete,
-        urgency_level=3,
-        created_at=near_complete_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.update.return_value = complete_timer
-
-    result = await service.tick_timer(timer_id)
-
-    assert result.elapsed_time == 100
-    assert result.status == TimerStatus.complete
-    mock_repo.update.assert_called_once_with(timer_id, 100, TimerStatus.complete, 3)
-
-
-@pytest.mark.asyncio
-async def test_list_timers_returns_all_timers(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """Listing timers returns all timers from the repo."""
-    now = datetime.now()
-    timers = [
-        Timer(
+    async def create(self, duration: int) -> Timer:
+        """Create a new timer."""
+        timer = Timer(
             id=uuid4(),
-            duration=60,
+            duration=duration,
             elapsed_time=0,
             status=TimerStatus.idle,
             urgency_level=0,
-            created_at=now,
-            updated_at=now,
-        ),
-        Timer(
-            id=uuid4(),
-            duration=120,
-            elapsed_time=30,
-            status=TimerStatus.running,
-            urgency_level=0,
-            created_at=now,
-            updated_at=now,
-        ),
-    ]
-    mock_repo.list_all.return_value = timers
+            created_at=datetime.now(),
+            updated_at=datetime.now(),
+        )
+        self.timers[timer.id] = timer
+        return timer
 
-    result = await service.list_timers()
+    async def get_by_id(self, timer_id) -> Timer | None:
+        """Fetch timer by ID."""
+        return self.timers.get(timer_id)
 
-    assert len(result) == 2
-    assert result[0].duration == 60
-    assert result[1].duration == 120
-    mock_repo.list_all.assert_called_once()
+    async def get_all(self) -> list[Timer]:
+        """Fetch all timers."""
+        return list(self.timers.values())
 
-
-@pytest.mark.asyncio
-async def test_start_timer_returns_none_if_not_found(
-    service: TimerService, mock_repo: AsyncMock
-):
-    """Starting a non-existent timer returns None."""
-    timer_id = uuid4()
-    mock_repo.get_by_id.return_value = None
-
-    result = await service.start_timer(timer_id)
-
-    assert result is None
-    mock_repo.get_by_id.assert_called_once_with(timer_id)
-    mock_repo.update.assert_not_called()
+    async def update(self, timer_id, **kwargs) -> Timer:
+        """Update timer with given fields."""
+        timer = self.timers.get(timer_id)
+        if not timer:
+            return None
+        for key, value in kwargs.items():
+            if hasattr(timer, key):
+                setattr(timer, key, value)
+        timer.updated_at = datetime.now()
+        self.timers[timer_id] = timer
+        return timer
 
 
-@pytest.mark.asyncio
-async def test_stop_timer_returns_none_if_not_found(
-    service: TimerService, mock_repo: AsyncMock
-):
-    """Stopping a non-existent timer returns None."""
-    timer_id = uuid4()
-    mock_repo.get_by_id.return_value = None
+@pytest.fixture
+def mock_repo():
+    """Provide mock repository."""
+    return MockTimerRepository()
 
-    result = await service.stop_timer(timer_id)
 
-    assert result is None
-    mock_repo.get_by_id.assert_called_once_with(timer_id)
-    mock_repo.update.assert_not_called()
+@pytest.fixture
+def service(mock_repo):
+    """Provide timer service with mock repo."""
+    return TimerService(mock_repo)
 
 
 @pytest.mark.asyncio
-async def test_reset_timer_returns_none_if_not_found(
-    service: TimerService, mock_repo: AsyncMock
-):
-    """Resetting a non-existent timer returns None."""
-    timer_id = uuid4()
-    mock_repo.get_by_id.return_value = None
-
-    result = await service.reset_timer(timer_id)
-
-    assert result is None
-    mock_repo.get_by_id.assert_called_once_with(timer_id)
-    mock_repo.update.assert_not_called()
+async def test_create_timer(service):
+    """Test creating a timer with valid duration."""
+    timer = await service.create_timer(60)
+    assert timer.duration == 60
+    assert timer.elapsed_time == 0
+    assert timer.status == TimerStatus.idle
+    assert timer.urgency_level == 0
 
 
 @pytest.mark.asyncio
-async def test_tick_timer_returns_none_if_not_found(
-    service: TimerService, mock_repo: AsyncMock
-):
-    """Ticking a non-existent timer returns None."""
-    timer_id = uuid4()
-    mock_repo.get_by_id.return_value = None
-
-    result = await service.tick_timer(timer_id)
-
-    assert result is None
-    mock_repo.get_by_id.assert_called_once_with(timer_id)
-    mock_repo.update.assert_not_called()
+async def test_create_timer_invalid_duration(service):
+    """Test creating timer with invalid duration raises error."""
+    with pytest.raises(ValueError, match="Duration must be positive"):
+        await service.create_timer(0)
+    with pytest.raises(ValueError, match="Duration must be positive"):
+        await service.create_timer(-10)
 
 
 @pytest.mark.asyncio
-async def test_urgency_computation_with_paused_timer(
-    service: TimerService, mock_repo: AsyncMock, sample_timer: Timer
-):
-    """Urgency is correctly recomputed when a paused timer is resumed."""
-    timer_id = uuid4()
-    paused_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=80,
-        status=TimerStatus.paused,
-        urgency_level=2,
-        created_at=sample_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.get_by_id.return_value = paused_timer
+async def test_get_timer(service):
+    """Test fetching a timer by ID."""
+    created = await service.create_timer(60)
+    fetched = await service.get_timer(created.id)
+    assert fetched.id == created.id
+    assert fetched.duration == 60
 
-    running_timer = Timer(
-        id=timer_id,
-        duration=100,
-        elapsed_time=80,
-        status=TimerStatus.running,
-        urgency_level=3,
-        created_at=paused_timer.created_at,
-        updated_at=datetime.now(),
-    )
-    mock_repo.update.return_value = running_timer
 
-    result = await service.start_timer(timer_id)
+@pytest.mark.asyncio
+async def test_get_timer_not_found(service):
+    """Test fetching non-existent timer raises error."""
+    fake_id = uuid4()
+    with pytest.raises(ValueError, match="not found"):
+        await service.get_timer(fake_id)
 
-    assert result.urgency_level == 3
-    assert result.status == TimerStatus.running
-    mock_repo.update.assert_called_once_with(timer_id, 80, TimerStatus.running, 3)
+
+@pytest.mark.asyncio
+async def test_get_all_timers(service):
+    """Test fetching all timers."""
+    await service.create_timer(60)
+    await service.create_timer(120)
+    timers = await service.get_all_timers()
+    assert len(timers) == 2
+
+
+@pytest.mark.asyncio
+async def test_set_duration(service):
+    """Test updating timer duration."""
+    timer = await service.create_timer(60)
+    updated = await service.set_duration(timer.id, 120)
+    assert updated.duration == 120
+
+
+@pytest.mark.asyncio
+async def test_set_duration_invalid(service):
+    """Test setting invalid duration raises error."""
+    timer = await service.create_timer(60)
+    with pytest.raises(ValueError, match="Duration must be positive"):
+        await service.set_duration(timer.id, 0)
+
+
+@pytest.mark.asyncio
+async def test_start_timer(service):
+    """Test starting a timer."""
+    timer = await service.create_timer(60)
+    started = await service.start_timer(timer.id)
+    assert started.status == TimerStatus.running
+
+
+@pytest.mark.asyncio
+async def test_start_timer_already_running(service):
+    """Test starting an already running timer raises error."""
+    timer = await service.create_timer(60)
+    await service.start_timer(timer.id)
+    with pytest.raises(ValueError, match="already running"):
+        await service.start_timer(timer.id)
+
+
+@pytest.mark.asyncio
+async def test_stop_timer(service):
+    """Test pausing a running timer."""
+    timer = await service.create_timer(60)
+    await service.start_timer(timer.id)
+    stopped = await service.stop_timer(timer.id)
+    assert stopped.status == TimerStatus.paused
+
+
+@pytest.mark.asyncio
+async def test_stop_timer_not_running(service):
+    """Test stopping a non-running timer raises error."""
+    timer = await service.create_timer(60)
+    with pytest.raises(ValueError, match="not running"):
+        await service.stop_timer(timer.id)
+
+
+@pytest.mark.asyncio
+async def test_reset_timer(service):
+    """Test resetting timer elapsed time."""
+    timer = await service.create_timer(60)
+    await service.start_timer(timer.id)
+    reset = await service.reset_timer(timer.id)
+    assert reset.elapsed_time == 0
+    assert reset.status == TimerStatus.idle
+
+
+@pytest.mark.asyncio
+async def test_tick_timer(service):
+    """Test timer tick increments elapsed time."""
+    timer = await service.create_timer(60)
+    await service.start_timer(timer.id)
+    ticked = await service.tick_timer(timer.id)
+    assert ticked.elapsed_time == 1
+    assert ticked.status == TimerStatus.running
+
+
+@pytest.mark.asyncio
+async def test_tick_timer_reaches_duration(service):
+    """Test timer tick completes when elapsed reaches duration."""
+    timer = await service.create_timer(5)
+    await service.start_timer(timer.id)
+    for _ in range(5):
+        ticked = await service.tick_timer(timer.id)
+    assert ticked.elapsed_time == 5
+    assert ticked.status == TimerStatus.complete
+
+
+@pytest.mark.asyncio
+async def test_tick_timer_not_running(service):
+    """Test tick on paused timer does not increment."""
+    timer = await service.create_timer(60)
+    ticked = await service.tick_timer(timer.id)
+    assert ticked.elapsed_time == 0
+
+
+@pytest.mark.asyncio
+async def test_urgency_level_calculation(service):
+    """Test urgency level updates with elapsed time."""
+    timer = await service.create_timer(100)
+    await service.start_timer(timer.id)
+
+    for _ in range(20):
+        await service.tick_timer(timer.id)
+    timer = await service.get_timer(timer.id)
+    assert timer.urgency_level == 0
+
+    for _ in range(20):
+        await service.tick_timer(timer.id)
+    timer = await service.get_timer(timer.id)
+    assert timer.urgency_level == 1
+
+    for _ in range(20):
+        await service.tick_timer(timer.id)
+    timer = await service.get_timer(timer.id)
+    assert timer.urgency_level == 2
+
+    for _ in range(20):
+        await service.tick_timer(timer.id)
+    timer = await service.get_timer(timer.id)
+    assert timer.urgency_level == 3

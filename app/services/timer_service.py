@@ -1,72 +1,75 @@
+from datetime import datetime
 from uuid import UUID
-from app.repos.timer_repo import TimerRepo
 from app.models.timer import Timer, TimerStatus
+from app.repos.timer_repo import TimerRepository
 
 
 class TimerService:
-    """Orchestrates timer lifecycle: create, start, stop, reset, tick; computes urgency."""
+    """Orchestrates timer business logic."""
 
-    def __init__(self, repo: TimerRepo) -> None:
-        self._repo = repo
+    def __init__(self, repo: TimerRepository):
+        """Initialize with timer repository."""
+        self.repo = repo
 
     async def create_timer(self, duration: int) -> Timer:
-        """Create a new timer with given duration in seconds."""
-        return await self._repo.create(duration)
+        """Create a new timer with given duration."""
+        if duration <= 0:
+            raise ValueError("Duration must be positive")
+        return await self.repo.create(duration)
+
+    async def get_timer(self, timer_id: UUID) -> Timer:
+        """Fetch timer by ID."""
+        timer = await self.repo.get_by_id(timer_id)
+        if not timer:
+            raise ValueError(f"Timer {timer_id} not found")
+        return timer
+
+    async def get_all_timers(self) -> list[Timer]:
+        """Fetch all timers."""
+        return await self.repo.get_all()
+
+    async def set_duration(self, timer_id: UUID, duration: int) -> Timer:
+        """Update timer duration."""
+        if duration <= 0:
+            raise ValueError("Duration must be positive")
+        timer = await self.get_timer(timer_id)
+        return await self.repo.update(timer_id, duration=duration)
 
     async def start_timer(self, timer_id: UUID) -> Timer:
-        """Start a timer (change status to running)."""
-        timer = await self._repo.get_by_id(timer_id)
-        if timer is None:
-            return None
-        urgency = self.compute_urgency(timer.elapsed_time, timer.duration)
-        return await self._repo.update(timer_id, timer.elapsed_time, TimerStatus.running, urgency)
+        """Start timer countdown."""
+        timer = await self.get_timer(timer_id)
+        if timer.status == TimerStatus.running:
+            raise ValueError("Timer already running")
+        return await self.repo.update(timer_id, status=TimerStatus.running)
 
     async def stop_timer(self, timer_id: UUID) -> Timer:
-        """Stop a timer (change status to paused)."""
-        timer = await self._repo.get_by_id(timer_id)
-        if timer is None:
-            return None
-        urgency = self.compute_urgency(timer.elapsed_time, timer.duration)
-        return await self._repo.update(timer_id, timer.elapsed_time, TimerStatus.paused, urgency)
+        """Pause timer countdown."""
+        timer = await self.get_timer(timer_id)
+        if timer.status != TimerStatus.running:
+            raise ValueError("Timer is not running")
+        return await self.repo.update(timer_id, status=TimerStatus.paused)
 
     async def reset_timer(self, timer_id: UUID) -> Timer:
-        """Reset a timer to elapsed_time=0 and status=idle."""
-        timer = await self._repo.get_by_id(timer_id)
-        if timer is None:
-            return None
-        return await self._repo.update(timer_id, 0, TimerStatus.idle, 0)
+        """Reset elapsed_time to 0."""
+        await self.get_timer(timer_id)
+        return await self.repo.update(timer_id, elapsed_time=0, status=TimerStatus.idle)
 
     async def tick_timer(self, timer_id: UUID) -> Timer:
-        """Increment elapsed_time by 1 second and recompute urgency."""
-        timer = await self._repo.get_by_id(timer_id)
-        if timer is None:
-            return None
-        new_elapsed = min(timer.elapsed_time + 1, timer.duration)
-        status = TimerStatus.complete if new_elapsed >= timer.duration else timer.status
-        urgency = self.compute_urgency(new_elapsed, timer.duration)
-        return await self._repo.update(timer_id, new_elapsed, status, urgency)
+        """Increment elapsed_time by 1 second and update urgency."""
+        timer = await self.get_timer(timer_id)
+        if timer.status != TimerStatus.running:
+            return timer
 
-    async def list_timers(self) -> list[Timer]:
-        """List all timers."""
-        return await self._repo.list_all()
+        new_elapsed = timer.elapsed_time + 1
+        new_status = TimerStatus.running
+        if new_elapsed >= timer.duration:
+            new_elapsed = timer.duration
+            new_status = TimerStatus.complete
 
-    def compute_urgency(self, elapsed_time: int, duration: int) -> int:
-        """Compute urgency level from elapsed_time / duration ratio.
-        
-        Returns:
-            0 for 0–33% elapsed
-            1 for 33–66% elapsed
-            2 for 66–90% elapsed
-            3 for 90%+ elapsed
-        """
-        if duration <= 0:
-            return 0
-        ratio = elapsed_time / duration
-        if ratio < 0.33:
-            return 0
-        elif ratio < 0.66:
-            return 1
-        elif ratio < 0.90:
-            return 2
-        else:
-            return 3
+        urgency = timer.calculate_urgency_level()
+        return await self.repo.update(
+            timer_id,
+            elapsed_time=new_elapsed,
+            status=new_status,
+            urgency_level=urgency,
+        )
