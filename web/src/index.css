@@ -1,0 +1,116 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .urgency-yellow {
+    @apply bg-yellow-400 text-gray-900 transition-colors duration-500;
+  }
+
+  .urgency-red {
+    @apply bg-red-600 text-white transition-colors duration-500;
+  }
+
+  .urgency-neutral {
+    @apply bg-gray-800 text-white transition-colors duration-500;
+  }
+
+  .timer-display-text {
+    @apply font-mono font-bold tracking-wider;
+  }
+
+  .character-idle {
+    @apply opacity-100 scale-100 transition-all duration-300;
+  }
+
+  .character-anxious {
+    @apply opacity-95 scale-105 transition-all duration-300;
+  }
+
+  .character-upset {
+    @apply opacity-100 scale-100 transition-all duration-200;
+  }
+
+  .control-button {
+    @apply px-6 py-3 font-semibold rounded-lg transition-all duration-200 active:scale-95;
+  }
+
+  .control-button-primary {
+    @apply bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed;
+  }
+
+  .control-button-secondary {
+    @apply bg-amber-600 text-white hover:bg-amber-700 disabled:bg-gray-500 disabled:cursor-not-allowed;
+  }
+
+  .control-button-danger {
+    @apply bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-500 disabled:cursor-not-allowed;
+  }
+}
+
+@keyframes urgency-flash {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 20px 10px rgba(220, 38, 38, 0);
+    transform: scale(1.02);
+  }
+}
+
+@keyframes heartbeat {
+  0%, 100% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(1.15);
+  }
+  50% {
+    transform: scale(1);
+  }
+  75% {
+    transform: scale(1.15);
+  }
+}
+
+@keyframes color-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@layer utilities {
+  .animate-urgency-flash {
+    animation: urgency-flash 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  .animate-heartbeat {
+    animation: heartbeat 1s ease-in-out infinite;
+  }
+
+  .animate-color-pulse {
+    animation: color-pulse 2s ease-in-out infinite;
+  }
+
+  .flash-red {
+    @apply animate-urgency-flash;
+  }
+}
+
+html, body, #root {
+  @apply w-full h-screen margin-0 padding-0 font-sans;
+}
+
+body {
+  @apply bg-gradient-to-b from-gray-900 to-gray-800 text-white;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  @apply box-border;
+}
